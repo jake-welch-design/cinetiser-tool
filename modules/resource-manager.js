@@ -22,9 +22,9 @@ export class ResourceManager {
     const controlsElement = document.getElementById("controls");
 
     if (loadingElement) {
-      loadingElement.textContent =
-        "Upload source image and color image - AI will auto-generate depth maps!";
+      loadingElement.innerHTML = "Upload images and click 'Generate' to begin";
       loadingElement.classList.remove("hidden");
+      loadingElement.classList.remove("loading");
     }
 
     if (controlsElement) {

@@ -118,8 +118,14 @@ class DepthMapExploration {
    * @param {File} sourceImageFile - The source image file for depth detection
    * @param {File} displayImageFile - The color/display image file
    * @param {Object} parameters - Processing parameters
+   * @param {Function} onDepthGenerated - Callback when depth map is generated (for preview update)
    */
-  async updateCompositionWithDepthDetection(sourceImageFile, displayImageFile, parameters) {
+  async updateCompositionWithDepthDetection(
+    sourceImageFile,
+    displayImageFile,
+    parameters,
+    onDepthGenerated
+  ) {
     // Update configuration
     this.config = { ...this.config, ...parameters };
     this.config.tilesX = this.config.compWidth || this.config.layerWidth;
@@ -132,10 +138,17 @@ class DepthMapExploration {
 
     try {
       console.log("Starting depth detection process...");
-      
+
       // Generate depth map from the source image
-      const depthMapImage = await this.depthDetector.generateDepthMap(sourceImageFile);
-      
+      const depthResult = await this.depthDetector.generateDepthMap(
+        sourceImageFile
+      );
+
+      // Call the callback to update the preview if provided
+      if (onDepthGenerated && typeof onDepthGenerated === "function") {
+        onDepthGenerated(depthResult.depthDataUrl);
+      }
+
       // Load the display image
       const displayImageURL = await this._fileToDataURL(displayImageFile);
       const displayImg = await Utils.loadImage(displayImageURL);
@@ -144,7 +157,7 @@ class DepthMapExploration {
 
       // Process images (depth map is now generated, display image is loaded)
       this.imageProcessor.processImages(
-        depthMapImage,
+        depthResult.depthImage,
         displayImg,
         this.config.layerWidth,
         this.config.layerHeight
@@ -179,6 +192,76 @@ class DepthMapExploration {
       this.resourceManager.showControls();
     } catch (error) {
       console.error("Error updating composition with depth detection:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update composition using existing depth map (for parameter changes like width/height)
+   * @param {HTMLImageElement} existingDepthMap - Already generated depth map
+   * @param {HTMLImageElement} displayImg - The display image
+   * @param {Object} parameters - Processing parameters
+   */
+  async updateCompositionWithExistingDepthMap(
+    existingDepthMap,
+    displayImg,
+    parameters
+  ) {
+    // Update configuration
+    this.config = { ...this.config, ...parameters };
+    this.config.tilesX = this.config.compWidth || this.config.layerWidth;
+    this.config.tilesY = this.config.compHeight || this.config.layerHeight;
+    this.config.layerWidth = this.config.compWidth || this.config.layerWidth;
+    this.config.layerHeight = this.config.compHeight || this.config.layerHeight;
+
+    // Update camera position
+    this.sceneManager.setCameraPosition(0, 0, this.config.zPosition);
+
+    try {
+      console.log(
+        "Updating composition with existing depth map (no AI processing)..."
+      );
+
+      // Process images using existing depth map
+      this.imageProcessor.processImages(
+        existingDepthMap,
+        displayImg,
+        this.config.layerWidth,
+        this.config.layerHeight
+      );
+
+      // Remove existing point cloud
+      const currentPointCloud = this.pointCloudGenerator.getCurrentPointCloud();
+      if (currentPointCloud) {
+        this.sceneManager.removeFromScene(currentPointCloud);
+      }
+      this.pointCloudGenerator.cleanup();
+
+      // Create new point cloud
+      const newPointCloud = this.pointCloudGenerator.generate(
+        this.imageProcessor,
+        {
+          layerWidth: this.config.layerWidth,
+          layerHeight: this.config.layerHeight,
+          tilesX: this.config.tilesX,
+          tilesY: this.config.tilesY,
+          pointSize: this.config.pointSize,
+          zOffsetMin: this.config.zOffsetMin,
+          zOffsetMax: this.config.zOffsetMax || this.config.maxDepth,
+        }
+      );
+
+      if (newPointCloud) {
+        this.sceneManager.addToScene(newPointCloud);
+      }
+
+      // Show controls after successful generation
+      this.resourceManager.showControls();
+    } catch (error) {
+      console.error(
+        "Error updating composition with existing depth map:",
+        error
+      );
       throw error;
     }
   }
