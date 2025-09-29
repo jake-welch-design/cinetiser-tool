@@ -23,7 +23,7 @@ export class ResourceManager {
 
     if (loadingElement) {
       loadingElement.textContent =
-        "Upload depth map and display images to begin";
+        "Upload depth map and color images and click 'Generate' to begin";
       loadingElement.classList.remove("hidden");
     }
 
