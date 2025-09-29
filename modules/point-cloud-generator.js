@@ -24,6 +24,7 @@ export class PointCloudGenerator {
       pointSize,
       zOffsetMin,
       zOffsetMax,
+      gridDensity = 1.0,
     } = parameters;
 
     const { depthMapData, imgData } = imageProcessor.getImageData();
@@ -33,9 +34,13 @@ export class PointCloudGenerator {
       return null;
     }
 
-    // Calculate tile dimensions
-    const tilesW = Math.ceil(layerWidth / tilesX);
-    const tilesH = Math.ceil(layerHeight / tilesY);
+    // Calculate tile dimensions adjusted by grid density
+    const baseTilesW = Math.ceil(layerWidth / tilesX);
+    const baseTilesH = Math.ceil(layerHeight / tilesY);
+
+    // Grid density affects the sampling step - higher density = smaller steps = more points
+    const tilesW = Math.max(1, Math.ceil(baseTilesW / gridDensity));
+    const tilesH = Math.max(1, Math.ceil(baseTilesH / gridDensity));
 
     const positions = [];
     const colors = [];
@@ -45,19 +50,21 @@ export class PointCloudGenerator {
     this.zOffsetMin = zOffsetMin;
     this.zOffsetMax = zOffsetMax;
 
-    // Calculate actual number of tiles that fit
-    const numTilesX = Math.floor(tilesX / tilesW);
-    const numTilesY = Math.floor(tilesY / tilesH);
+    // Calculate actual number of tiles that fit with grid density
+    const numTilesX = Math.floor(layerWidth / tilesW);
+    const numTilesY = Math.floor(layerHeight / tilesH);
 
     console.log("Creating point cloud with:", {
       layerWidth,
       layerHeight,
       tilesX,
       tilesY,
+      gridDensity,
       tilesW,
       tilesH,
       numTilesX,
       numTilesY,
+      totalPoints: numTilesX * numTilesY,
     });
 
     // Generate points

@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Depth Map Explorations - Three.js</title>
+    <title>Depth Collage Generator</title>
     <link rel="stylesheet" href="style.css">
 </head>
 
@@ -14,13 +14,13 @@
     <!-- Sidebar GUI Panel -->
     <div id="gui-panel">
         <div class="gui-content">
-            <h3>Settings:</h3>
+            <h3>Depth Collage Generator</h3>
 
             <div class="gui-section">
-                <label for="depthMapInput">Source Image (for AI depth detection):</label>
+                <label for="depthMapInput">Source image for depth map:</label>
                 <input type="file" id="depthMapInput" accept="image/*">
 
-                <label for="displayImageInput">Color Image:</label>
+                <label for="displayImageInput">Color image:</label>
                 <input type="file" id="displayImageInput" accept="image/*">
 
                 <div class="preview-container">
@@ -34,35 +34,7 @@
             </div>
 
             <div class="gui-section">
-                <div class="range-container">
-                    <label>Distance:</label>
-                    <input type="range" id="zPosition" min="100" max="800" step="20" value="400">
-                    <input type="number" id="zPositionValue" min="100" max="800" step="20" value="400">
-                </div>
-
-                <div class="range-container">
-                    <label>Width:</label>
-                    <input type="range" id="compWidth" min="200" max="1200" step="20" value="288">
-                    <input type="number" id="compWidthValue" min="200" max="1200" step="20" value="288">
-                </div>
-
-                <div class="range-container">
-                    <label>Height:</label>
-                    <input type="range" id="compHeight" min="200" max="1200" step="20" value="384">
-                    <input type="number" id="compHeightValue" min="200" max="1200" step="20" value="384">
-                </div>
-
-                <div class="range-container">
-                    <label>Point Size:</label>
-                    <input type="range" id="pointSize" min="1" max="10" step="0.1" value="3.5">
-                    <input type="number" id="pointSizeValue" min="1" max="10" step="0.1" value="3.5">
-                </div>
-
-                <div class="range-container">
-                    <label>Depth:</label>
-                    <input type="range" id="maxDepth" min="50" max="500" step="10" value="100">
-                    <input type="number" id="maxDepthValue" min="50" max="500" step="10" value="100">
-                </div>
+                <!-- Controls will be dynamically generated from config -->
             </div>
 
             <div class="gui-section">
@@ -81,6 +53,7 @@
             }
         }
     </script>
+    <script type="module" src="gui-generator.js"></script>
     <script type="module" src="gui.js"></script>
     <script type="module" src="sketch.js"></script>
 </body>

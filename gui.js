@@ -1,15 +1,16 @@
+import {
+  getDefaultParameters,
+  GUI_CONFIG,
+  validateParameter,
+  clampParameter,
+} from "./modules/config.js";
+
 // GUI Control System for Depth Map Explorer
 class GUIController {
   constructor() {
     this.depthMapFile = null;
     this.displayImageFile = null;
-    this.parameters = {
-      zPosition: 400,
-      compWidth: 288,
-      compHeight: 384,
-      pointSize: 3.5,
-      maxDepth: 100,
-    };
+    this.parameters = getDefaultParameters();
 
     // Store processed images for reuse (to avoid re-running AI)
     this.generatedDepthMap = null;
@@ -31,29 +32,14 @@ class GUIController {
     this.depthMapPreview = document.getElementById("depthMapPreview");
     this.displayImagePreview = document.getElementById("displayImagePreview");
 
-    // Parameter controls
-    this.controls = {
-      zPosition: {
-        slider: document.getElementById("zPosition"),
-        input: document.getElementById("zPositionValue"),
-      },
-      compWidth: {
-        slider: document.getElementById("compWidth"),
-        input: document.getElementById("compWidthValue"),
-      },
-      compHeight: {
-        slider: document.getElementById("compHeight"),
-        input: document.getElementById("compHeightValue"),
-      },
-      pointSize: {
-        slider: document.getElementById("pointSize"),
-        input: document.getElementById("pointSizeValue"),
-      },
-      maxDepth: {
-        slider: document.getElementById("maxDepth"),
-        input: document.getElementById("maxDepthValue"),
-      },
-    };
+    // Parameter controls - dynamically built from config
+    this.controls = {};
+    Object.keys(GUI_CONFIG).forEach((paramKey) => {
+      this.controls[paramKey] = {
+        slider: document.getElementById(paramKey),
+        input: document.getElementById(paramKey + "Value"),
+      };
+    });
 
     // Buttons
     this.generateBtn = document.getElementById("generateBtn");
@@ -76,17 +62,19 @@ class GUIController {
     Object.keys(this.controls).forEach((param) => {
       const control = this.controls[param];
 
-      // Sync slider and number input
+      // Sync slider and number input with validation
       control.slider.addEventListener("input", (e) => {
-        this.parameters[param] = parseFloat(e.target.value);
-        control.input.value = e.target.value;
-        this.onParameterChange(param, this.parameters[param]);
+        const value = clampParameter(param, e.target.value);
+        this.parameters[param] = value;
+        control.input.value = value;
+        this.onParameterChange(param, value);
       });
 
       control.input.addEventListener("input", (e) => {
-        this.parameters[param] = parseFloat(e.target.value);
-        control.slider.value = e.target.value;
-        this.onParameterChange(param, this.parameters[param]);
+        const value = clampParameter(param, e.target.value);
+        this.parameters[param] = value;
+        control.slider.value = value;
+        this.onParameterChange(param, value);
       });
     });
 
@@ -280,8 +268,12 @@ class GUIController {
     } else if (paramName === "maxDepth") {
       // Try to update max depth in real-time
       this.updateMaxDepth(value);
-    } else if (paramName === "compWidth" || paramName === "compHeight") {
-      // Width/height changes should use existing processed images (no AI re-processing)
+    } else if (
+      paramName === "compWidth" ||
+      paramName === "compHeight" ||
+      paramName === "gridDensity"
+    ) {
+      // Width/height/grid density changes should use existing processed images (no AI re-processing)
       this.throttledUpdateWithExistingImages();
     } else {
       // For other parameters, throttle updates to avoid too many regenerations
@@ -426,14 +418,8 @@ class GUIController {
     this.generatedDepthMap = null;
     this.loadedDisplayImage = null;
 
-    // Reset parameters to defaults
-    this.parameters = {
-      zPosition: 400,
-      compWidth: 288,
-      compHeight: 384,
-      pointSize: 3.5,
-      maxDepth: 100,
-    };
+    // Reset parameters to defaults from config
+    this.parameters = getDefaultParameters();
 
     // Update all controls to default values
     Object.keys(this.controls).forEach((name) => {

@@ -4,17 +4,19 @@ import { SceneManager } from "./modules/scene-manager.js";
 import { PointCloudGenerator } from "./modules/point-cloud-generator.js";
 import { ResourceManager } from "./modules/resource-manager.js";
 import { DepthDetector } from "./modules/depth-detector.js";
+import { getDefaultParameters } from "./modules/config.js";
 
 class DepthMapExploration {
   constructor() {
-    // Default parameters
+    // Get default parameters from centralized config
+    const defaults = getDefaultParameters();
     this.config = {
-      layerWidth: 288,
-      layerHeight: 384,
-      pointSize: 3.5,
-      zPosition: 400,
+      layerWidth: defaults.compWidth,
+      layerHeight: defaults.compHeight,
+      pointSize: defaults.pointSize,
+      zPosition: defaults.zPosition,
       zOffsetMin: 0,
-      zOffsetMax: 100,
+      zOffsetMax: defaults.maxDepth,
       bg: 0x000000,
     };
 
@@ -98,6 +100,7 @@ class DepthMapExploration {
           pointSize: this.config.pointSize,
           zOffsetMin: this.config.zOffsetMin,
           zOffsetMax: this.config.zOffsetMax || this.config.maxDepth,
+          gridDensity: this.config.gridDensity || 1.0,
         }
       );
 
@@ -181,6 +184,7 @@ class DepthMapExploration {
           pointSize: this.config.pointSize,
           zOffsetMin: this.config.zOffsetMin,
           zOffsetMax: this.config.zOffsetMax || this.config.maxDepth,
+          gridDensity: this.config.gridDensity || 1.0,
         }
       );
 
@@ -248,6 +252,7 @@ class DepthMapExploration {
           pointSize: this.config.pointSize,
           zOffsetMin: this.config.zOffsetMin,
           zOffsetMax: this.config.zOffsetMax || this.config.maxDepth,
+          gridDensity: this.config.gridDensity || 1.0,
         }
       );
 
