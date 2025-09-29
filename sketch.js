@@ -3,6 +3,7 @@ import { ImageProcessor } from "./modules/image-processor.js";
 import { SceneManager } from "./modules/scene-manager.js";
 import { PointCloudGenerator } from "./modules/point-cloud-generator.js";
 import { ResourceManager } from "./modules/resource-manager.js";
+import { DepthDetector } from "./modules/depth-detector.js";
 
 class DepthMapExploration {
   constructor() {
@@ -22,6 +23,7 @@ class DepthMapExploration {
     this.imageProcessor = new ImageProcessor();
     this.pointCloudGenerator = new PointCloudGenerator();
     this.resourceManager = new ResourceManager();
+    this.depthDetector = new DepthDetector();
 
     // Camera panning state
     this.cameraPosition = { x: 0, y: 0, z: this.config.zPosition };
@@ -33,6 +35,7 @@ class DepthMapExploration {
     this.resourceManager.registerResource(this.sceneManager, "cleanup");
     this.resourceManager.registerResource(this.imageProcessor, "cleanup");
     this.resourceManager.registerResource(this.pointCloudGenerator, "cleanup");
+    this.resourceManager.registerResource(this.depthDetector, "cleanup");
 
     this.init();
   }
@@ -108,6 +111,88 @@ class DepthMapExploration {
       console.error("Error updating composition:", error);
       throw error;
     }
+  }
+
+  /**
+   * Process regular images with automatic depth detection
+   * @param {File} sourceImageFile - The source image file for depth detection
+   * @param {File} displayImageFile - The color/display image file
+   * @param {Object} parameters - Processing parameters
+   */
+  async updateCompositionWithDepthDetection(sourceImageFile, displayImageFile, parameters) {
+    // Update configuration
+    this.config = { ...this.config, ...parameters };
+    this.config.tilesX = this.config.compWidth || this.config.layerWidth;
+    this.config.tilesY = this.config.compHeight || this.config.layerHeight;
+    this.config.layerWidth = this.config.compWidth || this.config.layerWidth;
+    this.config.layerHeight = this.config.compHeight || this.config.layerHeight;
+
+    // Update camera position
+    this.sceneManager.setCameraPosition(0, 0, this.config.zPosition);
+
+    try {
+      console.log("Starting depth detection process...");
+      
+      // Generate depth map from the source image
+      const depthMapImage = await this.depthDetector.generateDepthMap(sourceImageFile);
+      
+      // Load the display image
+      const displayImageURL = await this._fileToDataURL(displayImageFile);
+      const displayImg = await Utils.loadImage(displayImageURL);
+
+      console.log("Processing images with generated depth map...");
+
+      // Process images (depth map is now generated, display image is loaded)
+      this.imageProcessor.processImages(
+        depthMapImage,
+        displayImg,
+        this.config.layerWidth,
+        this.config.layerHeight
+      );
+
+      // Remove existing point cloud
+      const currentPointCloud = this.pointCloudGenerator.getCurrentPointCloud();
+      if (currentPointCloud) {
+        this.sceneManager.removeFromScene(currentPointCloud);
+      }
+      this.pointCloudGenerator.cleanup();
+
+      // Create new point cloud
+      const newPointCloud = this.pointCloudGenerator.generate(
+        this.imageProcessor,
+        {
+          layerWidth: this.config.layerWidth,
+          layerHeight: this.config.layerHeight,
+          tilesX: this.config.tilesX,
+          tilesY: this.config.tilesY,
+          pointSize: this.config.pointSize,
+          zOffsetMin: this.config.zOffsetMin,
+          zOffsetMax: this.config.zOffsetMax || this.config.maxDepth,
+        }
+      );
+
+      if (newPointCloud) {
+        this.sceneManager.addToScene(newPointCloud);
+      }
+
+      // Show controls after successful generation
+      this.resourceManager.showControls();
+    } catch (error) {
+      console.error("Error updating composition with depth detection:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Helper method to convert file to data URL
+   */
+  _fileToDataURL(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
   }
 
   // Public methods for GUI to update parameters in real-time

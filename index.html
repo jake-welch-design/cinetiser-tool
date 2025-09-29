@@ -9,7 +9,7 @@
 </head>
 
 <body>
-    <div id="loading">Upload depth map and color images and click 'Generate' to begin</div>
+    <div id="loading">Upload source image and color image - AI will auto-generate depth maps!</div>
 
     <!-- Sidebar GUI Panel -->
     <div id="gui-panel">
@@ -17,7 +17,7 @@
             <h3>Settings:</h3>
 
             <div class="gui-section">
-                <label for="depthMapInput">Depth Map Image (will be converted):</label>
+                <label for="depthMapInput">Source Image (for AI depth detection):</label>
                 <input type="file" id="depthMapInput" accept="image/*">
 
                 <label for="displayImageInput">Color Image:</label>
@@ -76,7 +76,8 @@
         {
             "imports": {
                 "three": "https://unpkg.com/three@0.155.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.155.0/examples/jsm/"
+                "three/addons/": "https://unpkg.com/three@0.155.0/examples/jsm/",
+                "@huggingface/transformers": "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.3/dist/transformers.min.js"
             }
         }
     </script>

@@ -23,7 +23,7 @@ export class ResourceManager {
 
     if (loadingElement) {
       loadingElement.textContent =
-        "Upload depth map and color images and click 'Generate' to begin";
+        "Upload source image and color image - AI will auto-generate depth maps!";
       loadingElement.classList.remove("hidden");
     }
 

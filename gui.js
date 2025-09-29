@@ -134,23 +134,29 @@ class GUIController {
 
   async generateComposition() {
     if (!this.depthMapFile || !this.displayImageFile) {
-      alert("Please select both depth map and display images files.");
+      alert("Please select both source image and display image files.");
       return;
     }
 
     try {
       this.generateBtn.disabled = true;
-      this.generateBtn.textContent = "Generating...";
+      this.generateBtn.textContent = "Generating depth map...";
 
-      // Load images as data URLs
-      const depthMapURL = await this.fileToDataURL(this.depthMapFile);
-      const displayImageURL = await this.fileToDataURL(this.displayImageFile);
+      // Check if depth detector is ready, if not initialize it
+      if (window.depthMapExplorer && !window.depthMapExplorer.depthDetector.isReady()) {
+        if (!window.depthMapExplorer.depthDetector.isModelLoading()) {
+          this.generateBtn.textContent = "Loading AI model...";
+          await window.depthMapExplorer.depthDetector.initialize();
+        }
+      }
 
-      // Trigger regeneration with new images and parameters
+      this.generateBtn.textContent = "Processing images...";
+
+      // Use depth detection to automatically generate depth map from source image
       if (window.depthMapExplorer) {
-        await window.depthMapExplorer.updateComposition(
-          depthMapURL,
-          displayImageURL,
+        await window.depthMapExplorer.updateCompositionWithDepthDetection(
+          this.depthMapFile, // This will be used for depth detection
+          this.displayImageFile, // This will be used for color
           this.parameters
         );
       }
@@ -248,14 +254,10 @@ class GUIController {
       this.generateBtn.textContent = "Updating...";
       this.generateBtn.disabled = true;
 
-      // Convert current files to data URLs
-      const depthMapURL = await this.fileToDataURL(this.depthMapFile);
-      const displayImageURL = await this.fileToDataURL(this.displayImageFile);
-
-      // Update composition with current parameters
-      await window.depthMapExplorer.updateComposition(
-        depthMapURL,
-        displayImageURL,
+      // Use depth detection to regenerate with current parameters
+      await window.depthMapExplorer.updateCompositionWithDepthDetection(
+        this.depthMapFile,
+        this.displayImageFile,
         this.parameters
       );
 
