@@ -19,9 +19,8 @@ export class SceneManager {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(backgroundColor);
 
-    // Calculate canvas dimensions (subtract sidebar width)
-    const sidebarWidth = 380;
-    const canvasWidth = window.innerWidth - sidebarWidth;
+    // Canvas is now full-width since GUI is an overlay
+    const canvasWidth = window.innerWidth;
     const canvasHeight = window.innerHeight;
 
     // Create perspective camera
@@ -119,9 +118,8 @@ export class SceneManager {
    */
   onWindowResize() {
     if (this.camera && this.renderer) {
-      // Calculate canvas dimensions (subtract sidebar width)
-      const sidebarWidth = 380;
-      const canvasWidth = window.innerWidth - sidebarWidth;
+      // Canvas is full-width since GUI is an overlay
+      const canvasWidth = window.innerWidth;
       const canvasHeight = window.innerHeight;
 
       this.camera.aspect = canvasWidth / canvasHeight;
