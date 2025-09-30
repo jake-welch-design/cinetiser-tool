@@ -131,7 +131,7 @@ class GUIController {
     }
 
     try {
-      this.setLoadingState("Loading AI model...");
+      this.setLoadingState("Loading depth estimation model...");
 
       // Check if depth detector is ready, if not initialize it
       if (

@@ -31,8 +31,10 @@ export class ImageProcessor {
     this.imgCanvas.width = layerWidth;
     this.imgCanvas.height = layerHeight;
 
-    const depthMapCtx = this.depthMapCanvas.getContext("2d");
-    const imgCtx = this.imgCanvas.getContext("2d");
+    const depthMapCtx = this.depthMapCanvas.getContext("2d", {
+      colorSpace: "srgb",
+    });
+    const imgCtx = this.imgCanvas.getContext("2d", { colorSpace: "srgb" });
 
     // Calculate aspect ratios and dimensions
     const depthMapAspect = depthMap.width / depthMap.height;

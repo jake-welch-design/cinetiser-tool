@@ -40,6 +40,9 @@ export class SceneManager {
     });
     this.renderer.setSize(canvasWidth, canvasHeight);
 
+    // Set proper color space for accurate color reproduction
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+
     // Disable tone mapping to preserve exact colors
     this.renderer.toneMapping = THREE.NoToneMapping;
     this.renderer.toneMappingExposure = 1.0;

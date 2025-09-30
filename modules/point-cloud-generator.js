@@ -177,9 +177,15 @@ export class PointCloudGenerator {
       return null;
     }
 
+    // Apply gamma correction to fix brightness issue (gamma 2.2 for accurate colors)
+    const gamma = 2.2;
+    const correctedR = Math.pow(imgPixel.r / 255, gamma);
+    const correctedG = Math.pow(imgPixel.g / 255, gamma);
+    const correctedB = Math.pow(imgPixel.b / 255, gamma);
+
     return {
       position: [worldX, worldY, worldZ],
-      color: [imgPixel.r / 255, imgPixel.g / 255, imgPixel.b / 255],
+      color: [correctedR, correctedG, correctedB],
       brightness: brightness, // Store brightness for real-time depth updates
     };
   }
