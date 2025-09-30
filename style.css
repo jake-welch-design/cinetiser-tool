@@ -14,7 +14,8 @@ body {
     font-family: 'Satoshi', Arial, sans-serif;
     overflow: hidden;
     color: #e0e0e0;
-    padding-left: 380px;
+    padding-left: 0;
+    /* No padding - canvas is always full width */
 }
 
 canvas {
@@ -39,6 +40,21 @@ canvas {
     text-shadow: 0 0 3px rgba(255, 255, 255, 1);
 }
 
+#main-title {
+    position: fixed;
+    top: 20px;
+    left: 30px;
+    /* Always positioned at left since canvas is full width */
+    font-family: 'Satoshi', Arial, sans-serif;
+    font-size: 18px;
+    /* Match website link font size */
+    font-weight: 600;
+    color: #ffffff;
+    margin: 0;
+    z-index: 1100;
+    /* Higher than GUI to stay on top */
+}
+
 .hidden {
     display: none !important;
 }
@@ -46,13 +62,15 @@ canvas {
 #loading {
     position: absolute;
     top: 50%;
-    left: calc(50% + 190px);
+    left: 50%;
+    /* Centered on full-width canvas */
     transform: translate(-50%, -50%);
     color: #f0f0f0;
     font-size: 20px;
     display: flex;
     flex-direction: column;
     align-items: center;
+    text-align: center;
     gap: 20px;
 }
 
@@ -65,8 +83,65 @@ canvas {
     height: 20px;
 }
 
-.sidebar-toggle {
-    display: none;
+.gui-toggle-btn {
+    position: fixed;
+    top: 60px;
+    /* Closer to the main title */
+    left: 25px;
+    /* Always align with main title */
+    z-index: 1001;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+    padding: 4px 8px;
+    /* Smaller padding for narrower button */
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    border-radius: 3px;
+    margin: 0;
+    width: auto;
+    /* Narrower width */
+    display: inline-block;
+}
+
+.gui-toggle-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: translateY(-1px);
+}
+
+/* Hide button when GUI is open */
+body:not(.gui-hidden) .gui-toggle-btn {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.gui-close-btn {
+    position: absolute;
+    top: 15px;
+    right: 20px;
+    background: none;
+    border: none;
+    color: #ffffff;
+    font-size: 24px;
+    font-weight: 300;
+    cursor: pointer;
+    padding: 5px;
+    transition: all 0.2s ease;
+    z-index: 1002;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.gui-close-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    transform: scale(1.1);
 }
 
 #gui-panel {
@@ -75,27 +150,30 @@ canvas {
     left: 0;
     height: 100vh;
     width: 380px;
-    background: rgba(15, 15, 15, 0.9);
-    backdrop-filter: blur(20px);
-    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(15, 15, 15, 0.95);
+    backdrop-filter: blur(25px);
+    border-right: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 2px 0 20px rgba(0, 0, 0, 0.5);
     color: #f0f0f0;
     font-size: 14px;
     z-index: 1000;
     overflow-y: auto;
+    transform: translateX(0);
+    transition: transform 0.3s ease;
+}
+
+#gui-panel.hidden {
+    transform: translateX(-100%);
 }
 
 .gui-content {
-    padding: 20px;
-    height: 100%;
+    padding: 70px 20px 20px 20px;
+    /* Extra top padding for header space */
+    height: calc(100% - 50px);
+    overflow-y: auto;
 }
 
-#gui-panel h3 {
-    margin: 0 0 20px 15px;
-    font-size: 16px;
-    font-weight: 600;
-    color: #ffffff;
-    text-align: left;
-}
+/* Header styles moved to #main-title */
 
 .gui-section {
     margin-bottom: 20px;
@@ -285,5 +363,41 @@ input[type="file"] {
 
     100% {
         transform: translate(24px, -50%);
+    }
+}
+
+/* Mobile Styles */
+@media (max-width: 768px) {
+    #gui-panel {
+        width: 100vw;
+        background: rgba(15, 15, 15, 0.98);
+    }
+
+    #main-title {
+        top: 10px;
+        left: 10px;
+        font-size: 16px;
+        /* Smaller on mobile but proportional */
+    }
+
+    .gui-toggle-btn {
+        top: 45px;
+        /* Closer to title on mobile */
+        left: 10px;
+        padding: 3px 6px;
+        /* Even smaller on mobile */
+        font-size: 12px;
+    }
+
+    #websiteLink {
+        top: 10px;
+        right: 10px;
+        font-size: 16px;
+    }
+
+    #loading {
+        left: 50%;
+        font-size: 14px;
+        transform: translate(-50%, -50%);
     }
 }

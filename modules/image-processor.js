@@ -1,7 +1,7 @@
 import { Utils } from "./utils.js";
 
 /**
- * Handles image processing and canvas operations
+ * Image processing and canvas operations
  */
 export class ImageProcessor {
   constructor() {
@@ -122,14 +122,14 @@ export class ImageProcessor {
 
     ctx.drawImage(
       image,
-      sourceX * (image.width / dimensions.width), // source x (scaled back to original image coords)
-      sourceY * (image.height / dimensions.height), // source y
-      sourceW * (image.width / dimensions.width), // source width
-      sourceH * (image.height / dimensions.height), // source height
-      destX, // dest x
-      destY, // dest y
-      sourceW, // dest width
-      sourceH // dest height
+      sourceX * (image.width / dimensions.width),
+      sourceY * (image.height / dimensions.height),
+      sourceW * (image.width / dimensions.width),
+      sourceH * (image.height / dimensions.height),
+      destX,
+      destY,
+      sourceW,
+      sourceH
     );
 
     ctx.restore();

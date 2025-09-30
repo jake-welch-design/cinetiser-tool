@@ -22,7 +22,6 @@ export class DepthDetector {
       this.isLoading = true;
       console.log("Loading depth estimation model...");
 
-      // Create depth-estimation pipeline using the same model as the Node.js version
       this.depthEstimator = await pipeline(
         "depth-estimation",
         "Xenova/depth-anything-small-hf"

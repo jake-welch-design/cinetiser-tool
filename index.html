@@ -10,12 +10,18 @@
 
 <body>
     <a href="https://jakewelch.design" target="_blank" id="websiteLink">jakewelch.design</a>
+    <h1 id="main-title">Depth Collage Generator</h1>
     <div id="loading">Upload images and click 'Generate' to begin</div>
+
+    <!-- GUI Toggle Button (stays visible when GUI is closed) -->
+    <button id="gui-toggle" class="gui-toggle-btn">Open Settings</button>
 
     <!-- Sidebar GUI Panel -->
     <div id="gui-panel">
+        <!-- Close button (X) in top-right of GUI -->
+        <button id="gui-close" class="gui-close-btn">×</button>
+
         <div class="gui-content">
-            <h3>Depth Collage Generator</h3>
 
             <div class="gui-section">
                 <label for="depthMapInput">Source image for depth map:</label>

@@ -43,6 +43,15 @@ class GUIController {
     // Buttons
     this.generateBtn = document.getElementById("generateBtn");
     this.saveBtn = document.getElementById("saveBtn");
+    this.guiToggleBtn = document.getElementById("gui-toggle");
+    this.guiCloseBtn = document.getElementById("gui-close");
+    this.guiPanel = document.getElementById("gui-panel");
+
+    // GUI toggle state (defaults to closed now)
+    this.isGuiOpen = false;
+    // Initialize GUI as closed
+    this.guiPanel.classList.add("hidden");
+    document.body.classList.add("gui-hidden");
 
     // Initially disable generate button
     this.generateBtn.disabled = true;
@@ -82,6 +91,8 @@ class GUIController {
       this.generateComposition()
     );
     this.saveBtn.addEventListener("click", () => this.saveImage());
+    this.guiToggleBtn.addEventListener("click", () => this.openGui());
+    this.guiCloseBtn.addEventListener("click", () => this.closeGui());
 
     // Keyboard shortcuts
     document.addEventListener("keydown", (e) => {
@@ -450,6 +461,18 @@ class GUIController {
       clearTimeout(this.updateThrottleTimeout);
       this.updateThrottleTimeout = null;
     }
+  }
+
+  openGui() {
+    this.isGuiOpen = true;
+    this.guiPanel.classList.remove("hidden");
+    document.body.classList.remove("gui-hidden");
+  }
+
+  closeGui() {
+    this.isGuiOpen = false;
+    this.guiPanel.classList.add("hidden");
+    document.body.classList.add("gui-hidden");
   }
 }
 
