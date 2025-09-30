@@ -14,7 +14,7 @@ export const GUI_CONFIG = {
 
   // Size of individual points
   pointSize: {
-    default: 3.5,
+    default: 2,
     min: 1,
     max: 10,
     step: 0.1,
@@ -41,7 +41,7 @@ export const GUI_CONFIG = {
 
   // Composition height
   compHeight: {
-    default: 400,
+    default: 600,
     min: 200,
     max: 1200,
     step: 20,
@@ -50,7 +50,7 @@ export const GUI_CONFIG = {
 
   // Composition z position
   zPosition: {
-    default: 400,
+    default: 600,
     min: 20,
     max: 1000,
     step: 20,
