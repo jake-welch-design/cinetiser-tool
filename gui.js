@@ -5,14 +5,14 @@ import {
   clampParameter,
 } from "./modules/config.js";
 
-// GUI Control System for Depth Map Explorer
+// GUI
 class GUIController {
   constructor() {
     this.depthMapFile = null;
     this.displayImageFile = null;
     this.parameters = getDefaultParameters();
 
-    // Store processed images for reuse (to avoid re-running AI)
+    // Store processed images for reuse (to avoid re-running depth estimation)
     this.generatedDepthMap = null;
     this.loadedDisplayImage = null;
 
@@ -22,7 +22,6 @@ class GUIController {
 
     this.initializeControls();
     this.setupEventListeners();
-    // Sidebar is now always visible - no toggle needed
   }
 
   initializeControls() {
@@ -32,7 +31,7 @@ class GUIController {
     this.depthMapPreview = document.getElementById("depthMapPreview");
     this.displayImagePreview = document.getElementById("displayImagePreview");
 
-    // Parameter controls - dynamically built from config
+    // Parameter controls - dynamically updated from config.js
     this.controls = {};
     Object.keys(GUI_CONFIG).forEach((paramKey) => {
       this.controls[paramKey] = {
@@ -148,8 +147,8 @@ class GUIController {
       // Use depth detection to automatically generate depth map from source image
       if (window.depthMapExplorer) {
         await window.depthMapExplorer.updateCompositionWithDepthDetection(
-          this.depthMapFile, // This will be used for depth detection
-          this.displayImageFile, // This will be used for color
+          this.depthMapFile, // for depth detection
+          this.displayImageFile, // for color
           this.parameters,
           // Callback to update depth map preview and store processed images
           async (depthDataUrl) => {

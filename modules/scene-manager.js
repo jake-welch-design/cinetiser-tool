@@ -33,7 +33,6 @@ export class SceneManager {
     );
     this.camera.position.z = cameraZ;
 
-    // Create renderer with flat color rendering
     this.renderer = new THREE.WebGLRenderer({
       antialias: true,
       preserveDrawingBuffer: true,
@@ -43,7 +42,7 @@ export class SceneManager {
     // Set proper color space for accurate color reproduction
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-    // Disable tone mapping to preserve exact colors
+    // Disable tone mapping to preserve image colors
     this.renderer.toneMapping = THREE.NoToneMapping;
     this.renderer.toneMappingExposure = 1.0;
 
@@ -56,7 +55,7 @@ export class SceneManager {
   }
 
   /**
-   * Start the animation loop
+   * Start animation loop
    */
   startAnimation() {
     const animate = () => {
@@ -104,7 +103,7 @@ export class SceneManager {
   }
 
   /**
-   * Save current frame as image
+   * Save frame as image
    */
   saveFrame(filename = `depth_map_collage_${Date.now()}.png`) {
     this.renderer.render(this.scene, this.camera);

@@ -15,7 +15,6 @@ body {
     overflow: hidden;
     color: #e0e0e0;
     padding-left: 380px;
-    /* Reserve space for sidebar */
 }
 
 canvas {
@@ -48,7 +47,6 @@ canvas {
     position: absolute;
     top: 50%;
     left: calc(50% + 190px);
-    /* Center in the canvas area (adjusted for left sidebar) */
     transform: translate(-50%, -50%);
     color: #f0f0f0;
     font-size: 20px;
@@ -69,7 +67,6 @@ canvas {
 
 .sidebar-toggle {
     display: none;
-    /* Hide toggle button since sidebar is always visible */
 }
 
 #gui-panel {
@@ -158,7 +155,6 @@ button:hover {
     background: rgba(255, 255, 255, 0.2);
 }
 
-/* Individual styling for Generate button */
 #generateBtn {
     background: white;
     border: 1px solid white;
@@ -223,7 +219,6 @@ input[type="file"] {
     margin-bottom: 10px;
 }
 
-/* Loading animation */
 .loading-dots {
     display: inline-block;
     position: relative;

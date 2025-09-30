@@ -1,5 +1,5 @@
 /**
- * Utility functions for the Depth Map Explorer
+ * Utility functions
  */
 
 export class Utils {

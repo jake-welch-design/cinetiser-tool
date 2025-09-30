@@ -1,10 +1,9 @@
 /**
- * Centralized configuration for all GUI parameters
- * Modify values here to update throughout the entire application
+ * Configuration for GUI parameters
  */
 
 export const GUI_CONFIG = {
-  // Maximum depth displacement for points
+  // Maximum depth z displacement
   maxDepth: {
     default: 200,
     min: 0,
@@ -13,7 +12,7 @@ export const GUI_CONFIG = {
     label: "Depth Amount",
   },
 
-  // Size of individual points in the point cloud
+  // Size of individual points
   pointSize: {
     default: 3.5,
     min: 1,
@@ -22,7 +21,7 @@ export const GUI_CONFIG = {
     label: "Point Size",
   },
 
-  // Grid density for point sampling
+  // Grid density
   gridDensity: {
     default: 1.0,
     min: 0.1,
@@ -31,7 +30,7 @@ export const GUI_CONFIG = {
     label: "Grid Density",
   },
 
-  // Canvas composition width
+  // Composition width
   compWidth: {
     default: 400,
     min: 200,
@@ -40,7 +39,7 @@ export const GUI_CONFIG = {
     label: "Width",
   },
 
-  // Canvas composition height
+  // Composition height
   compHeight: {
     default: 400,
     min: 200,
@@ -49,7 +48,7 @@ export const GUI_CONFIG = {
     label: "Height",
   },
 
-  // Camera distance from the point cloud
+  // Composition z position
   zPosition: {
     default: 400,
     min: 20,
@@ -58,9 +57,7 @@ export const GUI_CONFIG = {
     label: "Distance",
   },
 };
-/**
- * Helper function to get default values as an object
- */
+
 export function getDefaultParameters() {
   const defaults = {};
   for (const [key, config] of Object.entries(GUI_CONFIG)) {
@@ -69,16 +66,10 @@ export function getDefaultParameters() {
   return defaults;
 }
 
-/**
- * Helper function to get parameter config by key
- */
 export function getParameterConfig(key) {
   return GUI_CONFIG[key] || null;
 }
 
-/**
- * Helper function to validate a parameter value
- */
 export function validateParameter(key, value) {
   const config = GUI_CONFIG[key];
   if (!config) return false;
@@ -87,9 +78,6 @@ export function validateParameter(key, value) {
   return numValue >= config.min && numValue <= config.max;
 }
 
-/**
- * Helper function to clamp a parameter value to valid range
- */
 export function clampParameter(key, value) {
   const config = GUI_CONFIG[key];
   if (!config) return value;

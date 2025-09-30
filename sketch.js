@@ -8,7 +8,7 @@ import { getDefaultParameters } from "./modules/config.js";
 
 class DepthMapExploration {
   constructor() {
-    // Get default parameters from centralized config
+    // Get default parameters from config.js
     const defaults = getDefaultParameters();
     this.config = {
       layerWidth: defaults.compWidth,
@@ -43,7 +43,7 @@ class DepthMapExploration {
   }
 
   async init() {
-    // Clean up any existing resources first
+    // Clean up any existing resources
     this.cleanup();
 
     this.setupThreeJS();
@@ -348,9 +348,7 @@ class DepthMapExploration {
     const canvas = this.sceneManager.getCanvas();
     if (!canvas) return;
 
-    // Mouse down - start panning
     canvas.addEventListener("mousedown", (event) => {
-      // Only pan with left mouse button
       if (event.button === 0) {
         this.isPanning = true;
         this.lastMousePosition = {
@@ -362,14 +360,13 @@ class DepthMapExploration {
       }
     });
 
-    // Mouse move - perform panning
     canvas.addEventListener("mousemove", (event) => {
       if (this.isPanning) {
         const deltaX = event.clientX - this.lastMousePosition.x;
         const deltaY = event.clientY - this.lastMousePosition.y;
 
         // Update camera position based on mouse movement
-        // Invert Y axis to make movement feel natural
+        // Invert Y axis
         this.cameraPosition.x -= deltaX * this.panSensitivity;
         this.cameraPosition.y += deltaY * this.panSensitivity;
 
@@ -388,7 +385,6 @@ class DepthMapExploration {
       }
     });
 
-    // Mouse up - stop panning
     canvas.addEventListener("mouseup", (event) => {
       if (event.button === 0) {
         this.isPanning = false;
@@ -397,13 +393,11 @@ class DepthMapExploration {
       }
     });
 
-    // Mouse leave - stop panning
     canvas.addEventListener("mouseleave", () => {
       this.isPanning = false;
       canvas.style.cursor = "grab";
     });
 
-    // Set initial cursor
     canvas.style.cursor = "grab";
 
     // Touch events for mobile support
@@ -449,12 +443,10 @@ class DepthMapExploration {
   }
 
   setupControls() {
-    // Keyboard controls
     document.addEventListener("keydown", (event) => {
       if (event.key.toLowerCase() === "s") {
         this.saveFrame();
       } else if (event.key.toLowerCase() === "r") {
-        // Reset camera position
         this.resetCameraPosition();
       }
     });

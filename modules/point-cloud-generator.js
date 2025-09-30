@@ -7,7 +7,7 @@ import { Utils } from "./utils.js";
 export class PointCloudGenerator {
   constructor() {
     this.currentPointCloud = null;
-    this.depthValues = null; // Store original brightness values for real-time updates
+    this.depthValues = null;
     this.zOffsetMin = 0;
     this.zOffsetMax = 100;
   }
@@ -44,9 +44,8 @@ export class PointCloudGenerator {
 
     const positions = [];
     const colors = [];
-    const depthValues = []; // Store brightness values for real-time updates
+    const depthValues = [];
 
-    // Store parameters for later updates
     this.zOffsetMin = zOffsetMin;
     this.zOffsetMax = zOffsetMax;
 
@@ -86,12 +85,11 @@ export class PointCloudGenerator {
         if (point) {
           positions.push(...point.position);
           colors.push(...point.color);
-          depthValues.push(point.brightness); // Store brightness for later updates
+          depthValues.push(point.brightness);
         }
       }
     }
 
-    // Store depth values for real-time updates
     this.depthValues = depthValues;
 
     console.log("Generated", positions.length / 3, "points");
@@ -177,7 +175,7 @@ export class PointCloudGenerator {
       return null;
     }
 
-    // Apply gamma correction to fix brightness issue (gamma 2.2 for accurate colors)
+    // Gmma correction to make pixels true to image colors
     const gamma = 2.2;
     const correctedR = Math.pow(imgPixel.r / 255, gamma);
     const correctedG = Math.pow(imgPixel.g / 255, gamma);
@@ -186,7 +184,7 @@ export class PointCloudGenerator {
     return {
       position: [worldX, worldY, worldZ],
       color: [correctedR, correctedG, correctedB],
-      brightness: brightness, // Store brightness for real-time depth updates
+      brightness: brightness,
     };
   }
 
@@ -227,7 +225,7 @@ export class PointCloudGenerator {
    */
   updateMaxDepth(newZOffsetMax) {
     if (!this.currentPointCloud || !this.depthValues) {
-      return false; // No point cloud or depth data available
+      return false;
     }
 
     this.zOffsetMax = newZOffsetMax;
