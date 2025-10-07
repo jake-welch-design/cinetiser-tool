@@ -460,23 +460,26 @@ class DepthMapExploration {
         const touch1 = event.touches[0];
         const touch2 = event.touches[1];
         const currentDistance = this.getTouchDistance(touch1, touch2);
-        
+
         if (this.lastPinchDistance > 0) {
           const distanceDelta = currentDistance - this.lastPinchDistance;
           const zoomDelta = -distanceDelta * this.pinchSensitivity;
-          
-          const newZ = Math.max(this.minZoom, Math.min(this.maxZoom, this.cameraPosition.z + zoomDelta));
-          
+
+          const newZ = Math.max(
+            this.minZoom,
+            Math.min(this.maxZoom, this.cameraPosition.z + zoomDelta)
+          );
+
           this.cameraPosition.z = newZ;
           this.config.zPosition = newZ;
-          
+
           this.updateCameraPosition(
             this.cameraPosition.x,
             this.cameraPosition.y,
             this.cameraPosition.z
           );
         }
-        
+
         this.lastPinchDistance = currentDistance;
         event.preventDefault();
       }
