@@ -38,6 +38,11 @@ class DepthMapExploration {
     this.lastMousePosition = { x: 0, y: 0 };
     this.panSensitivity = 1.0;
 
+    // Pinch-to-zoom state for mobile
+    this.isPinching = false;
+    this.lastPinchDistance = 0;
+    this.pinchSensitivity = 2.0;
+
     // Register modules for cleanup
     this.resourceManager.registerResource(this.sceneManager, "cleanup");
     this.resourceManager.registerResource(this.imageProcessor, "cleanup");
@@ -408,18 +413,29 @@ class DepthMapExploration {
     // Touch events for mobile support
     canvas.addEventListener("touchstart", (event) => {
       if (event.touches.length === 1) {
+        // Single finger - start panning
         this.isPanning = true;
+        this.isPinching = false;
         const touch = event.touches[0];
         this.lastMousePosition = {
           x: touch.clientX,
           y: touch.clientY,
         };
         event.preventDefault();
+      } else if (event.touches.length === 2) {
+        // Two fingers - start pinching
+        this.isPinching = true;
+        this.isPanning = false;
+        const touch1 = event.touches[0];
+        const touch2 = event.touches[1];
+        this.lastPinchDistance = this.getTouchDistance(touch1, touch2);
+        event.preventDefault();
       }
     });
 
     canvas.addEventListener("touchmove", (event) => {
       if (this.isPanning && event.touches.length === 1) {
+        // Single finger panning
         const touch = event.touches[0];
         const deltaX = touch.clientX - this.lastMousePosition.x;
         const deltaY = touch.clientY - this.lastMousePosition.y;
@@ -439,12 +455,58 @@ class DepthMapExploration {
         };
 
         event.preventDefault();
+      } else if (this.isPinching && event.touches.length === 2) {
+        // Two finger pinch-to-zoom
+        const touch1 = event.touches[0];
+        const touch2 = event.touches[1];
+        const currentDistance = this.getTouchDistance(touch1, touch2);
+        
+        if (this.lastPinchDistance > 0) {
+          const distanceDelta = currentDistance - this.lastPinchDistance;
+          const zoomDelta = -distanceDelta * this.pinchSensitivity;
+          
+          const newZ = Math.max(this.minZoom, Math.min(this.maxZoom, this.cameraPosition.z + zoomDelta));
+          
+          this.cameraPosition.z = newZ;
+          this.config.zPosition = newZ;
+          
+          this.updateCameraPosition(
+            this.cameraPosition.x,
+            this.cameraPosition.y,
+            this.cameraPosition.z
+          );
+        }
+        
+        this.lastPinchDistance = currentDistance;
+        event.preventDefault();
       }
     });
 
-    canvas.addEventListener("touchend", () => {
-      this.isPanning = false;
+    canvas.addEventListener("touchend", (event) => {
+      if (event.touches.length === 0) {
+        // All fingers lifted
+        this.isPanning = false;
+        this.isPinching = false;
+        this.lastPinchDistance = 0;
+      } else if (event.touches.length === 1 && this.isPinching) {
+        // Went from pinch to single finger - start panning
+        this.isPinching = false;
+        this.isPanning = true;
+        const touch = event.touches[0];
+        this.lastMousePosition = {
+          x: touch.clientX,
+          y: touch.clientY,
+        };
+      }
+      event.preventDefault();
     });
+  }
+
+  // Helper function to calculate distance between two touch points
+  getTouchDistance(touch1, touch2) {
+    const dx = touch1.clientX - touch2.clientX;
+    const dy = touch1.clientY - touch2.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
   }
 
   setupControls() {
