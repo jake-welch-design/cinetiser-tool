@@ -47,15 +47,6 @@ export const GUI_CONFIG = {
     step: 20,
     label: "Height",
   },
-
-  // Composition z position
-  zPosition: {
-    default: 600,
-    min: 20,
-    max: 1000,
-    step: 20,
-    label: "Distance",
-  },
 };
 
 export function getDefaultParameters() {

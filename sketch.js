@@ -14,11 +14,16 @@ class DepthMapExploration {
       layerWidth: defaults.compWidth,
       layerHeight: defaults.compHeight,
       pointSize: defaults.pointSize,
-      zPosition: defaults.zPosition,
+      zPosition: 600, // Default distance value (removed from GUI config)
       zOffsetMin: 0,
       zOffsetMax: defaults.maxDepth,
       bg: 0x000000,
     };
+
+    // Zoom settings for scroll wheel
+    this.zoomSensitivity = 30;
+    this.minZoom = 100;
+    this.maxZoom = 5000;
 
     // Initialize modules
     this.sceneManager = new SceneManager();
@@ -450,6 +455,35 @@ class DepthMapExploration {
         this.resetCameraPosition();
       }
     });
+
+    // Add scroll wheel zoom control
+    const canvas = this.sceneManager.getCanvas();
+    if (canvas) {
+      canvas.addEventListener(
+        "wheel",
+        (event) => {
+          event.preventDefault();
+
+          // Zoom in/out based on wheel direction
+          const delta =
+            event.deltaY > 0 ? this.zoomSensitivity : -this.zoomSensitivity;
+          const newZ = Math.max(
+            this.minZoom,
+            Math.min(this.maxZoom, this.cameraPosition.z + delta)
+          );
+
+          this.cameraPosition.z = newZ;
+          this.config.zPosition = newZ;
+
+          this.updateCameraPosition(
+            this.cameraPosition.x,
+            this.cameraPosition.y,
+            this.cameraPosition.z
+          );
+        },
+        { passive: false }
+      );
+    }
   }
 
   resetCameraPosition() {

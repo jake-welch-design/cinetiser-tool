@@ -279,11 +279,9 @@ class GUIController {
       return; // Application not ready yet
     }
 
-    // Point size, Z position, and max depth can be updated immediately without regenerating geometry
+    // Point size and max depth can be updated immediately without regenerating geometry
     if (paramName === "pointSize") {
       this.updatePointSize(value);
-    } else if (paramName === "zPosition") {
-      this.updateZPosition(value);
     } else if (paramName === "maxDepth") {
       // Try to update max depth in real-time
       this.updateMaxDepth(value);
@@ -333,12 +331,6 @@ class GUIController {
   updatePointSize(size) {
     if (window.depthMapExplorer) {
       window.depthMapExplorer.updatePointSize(size);
-    }
-  }
-
-  updateZPosition(zPos) {
-    if (window.depthMapExplorer) {
-      window.depthMapExplorer.updateCameraPosition(0, 0, zPos);
     }
   }
 

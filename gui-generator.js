@@ -4,7 +4,7 @@ import { GUI_CONFIG } from "./modules/config.js";
  * Dynamically generate GUI controls from configuration
  */
 function generateGUIControls() {
-  const guiSection = document.querySelector(".gui-section:nth-of-type(2)"); // The section with controls
+  const guiSection = document.querySelector(".gui-section:nth-of-type(3)"); // The section with controls
   if (!guiSection) {
     console.error("GUI controls section not found");
     return;

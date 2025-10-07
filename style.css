@@ -44,11 +44,10 @@ canvas {
     position: fixed;
     top: 20px;
     left: 30px;
-    /* Always positioned at left since canvas is full width */
     font-family: 'Satoshi', Arial, sans-serif;
     font-size: 18px;
-    /* Match website link font size */
     font-weight: 600;
+    background: black;
     color: #ffffff;
     margin: 0;
     z-index: 1100;
@@ -120,7 +119,7 @@ body:not(.gui-hidden) .gui-toggle-btn {
 
 .gui-close-btn {
     position: absolute;
-    top: 15px;
+    top: 12px;
     right: 20px;
     background: none;
     border: none;
@@ -139,8 +138,7 @@ body:not(.gui-hidden) .gui-toggle-btn {
 }
 
 .gui-close-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 4px;
+    border-radius: 20px;
     transform: scale(1.1);
 }
 
@@ -169,7 +167,7 @@ body:not(.gui-hidden) .gui-toggle-btn {
 .gui-content {
     padding: 70px 20px 20px 20px;
     /* Extra top padding for header space */
-    height: calc(100% - 50px);
+    height: calc(100%);
     overflow-y: auto;
 }
 
