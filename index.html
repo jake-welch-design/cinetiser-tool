@@ -13,6 +13,23 @@
     <h1 id="main-title">Depth Collage Generator</h1>
     <div id="loading">Upload images and click 'Generate' to begin</div>
 
+    <!-- On-screen guides (initially hidden) -->
+    <div id="guides" class="guides hidden">
+        <!-- 3x3 Grid -->
+        <div class="grid-overlay">
+            <div class="grid-line grid-vertical-1"></div>
+            <div class="grid-line grid-vertical-2"></div>
+            <div class="grid-line grid-horizontal-1"></div>
+            <div class="grid-line grid-horizontal-2"></div>
+        </div>
+
+        <!-- Crosshair -->
+        <div class="crosshair">
+            <div class="crosshair-horizontal"></div>
+            <div class="crosshair-vertical"></div>
+        </div>
+    </div>
+
     <!-- GUI Toggle Button (stays visible when GUI is closed) -->
     <button id="gui-toggle" class="gui-toggle-btn">Open Settings</button>
 
@@ -43,6 +60,8 @@
             <div class="gui-section">
                 <!-- Controls will be dynamically generated from config -->
             </div>
+
+
 
             <div class="gui-section">
                 <button id="generateBtn">Generate</button>

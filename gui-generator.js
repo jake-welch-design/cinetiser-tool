@@ -37,6 +37,15 @@ function generateGUIControls() {
 
     guiSection.appendChild(containerDiv);
   });
+
+  // Add the guides checkbox after all sliders
+  const checkboxContainer = document.createElement("div");
+  checkboxContainer.className = "checkbox-container";
+  checkboxContainer.innerHTML = `
+    <label for="showGuides">Toggle guides: </label><input type="checkbox" id="showGuides" class="checkbox">
+    
+  `;
+  guiSection.appendChild(checkboxContainer);
 }
 
 // Generate controls when DOM is loaded

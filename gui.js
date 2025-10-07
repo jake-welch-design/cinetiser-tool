@@ -47,6 +47,10 @@ class GUIController {
     this.guiCloseBtn = document.getElementById("gui-close");
     this.guiPanel = document.getElementById("gui-panel");
 
+    // Guides elements
+    this.showGuidesCheckbox = document.getElementById("showGuides");
+    this.guidesElement = document.getElementById("guides");
+
     // GUI toggle state (defaults to closed now)
     this.isGuiOpen = false;
     // Initialize GUI as closed
@@ -93,6 +97,11 @@ class GUIController {
     this.saveBtn.addEventListener("click", () => this.saveImage());
     this.guiToggleBtn.addEventListener("click", () => this.openGui());
     this.guiCloseBtn.addEventListener("click", () => this.closeGui());
+
+    // Guides checkbox handler
+    this.showGuidesCheckbox.addEventListener("change", (e) =>
+      this.toggleGuides(e.target.checked)
+    );
 
     // Keyboard shortcuts
     document.addEventListener("keydown", (e) => {
@@ -473,6 +482,14 @@ class GUIController {
     this.isGuiOpen = false;
     this.guiPanel.classList.add("hidden");
     document.body.classList.add("gui-hidden");
+  }
+
+  toggleGuides(show) {
+    if (show) {
+      this.guidesElement.classList.remove("hidden");
+    } else {
+      this.guidesElement.classList.add("hidden");
+    }
   }
 }
 
