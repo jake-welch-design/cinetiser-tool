@@ -360,9 +360,7 @@ export default function sketch(p) {
         // Determine rotation amount and speed from params
         // Use proper null/undefined check for rotationAmount so 0 is not treated as falsy
         const rotationAmount =
-          params.rotationAmount !== undefined
-            ? params.rotationAmount
-            : rotAmt;
+          params.rotationAmount !== undefined ? params.rotationAmount : rotAmt;
         const rotationSpeed = params.rotationSpeed || speed;
         const isAnimated =
           params.animated !== undefined ? params.animated : true;
@@ -395,63 +393,63 @@ export default function sketch(p) {
         // When rotation amount is 0, no cinetisation effect is visible
         if (rotationAmount > 0) {
           for (let i = 0; i < sliceAmount; i++) {
-          // Each ring gets progressively smaller from the outer edge
-          const currentSize = maxDiameter - i * ringThickness;
+            // Each ring gets progressively smaller from the outer edge
+            const currentSize = maxDiameter - i * ringThickness;
 
-          // Lerp rotation amount based on transition progress
-          const lerpedRotationAmount = rotationAmount * rotationProgress;
+            // Lerp rotation amount based on transition progress
+            const lerpedRotationAmount = rotationAmount * rotationProgress;
 
-          const currentRotation = p.radians(
-            (isAnimated
-              ? p.map(
-                  p.sin(p.frameCount * rotationSpeed),
-                  -1,
-                  1,
-                  -lerpedRotationAmount,
-                  lerpedRotationAmount
-                )
-              : lerpedRotationAmount) * i
-          );
+            const currentRotation = p.radians(
+              (isAnimated
+                ? p.map(
+                    p.sin(p.frameCount * rotationSpeed),
+                    -1,
+                    1,
+                    -lerpedRotationAmount,
+                    lerpedRotationAmount
+                  )
+                : lerpedRotationAmount) * i
+            );
 
-          const sw = Math.max(1, Math.floor(currentSize));
-          const sh = Math.max(1, Math.floor(currentSize));
+            const sw = Math.max(1, Math.floor(currentSize));
+            const sh = Math.max(1, Math.floor(currentSize));
 
-          // sample top-left coordinates on the pattern image
-          const sx = Math.max(0, Math.floor(centerX - sw / 2));
-          const sy = Math.max(0, Math.floor(centerY - sh / 2));
+            // sample top-left coordinates on the pattern image
+            const sx = Math.max(0, Math.floor(centerX - sw / 2));
+            const sy = Math.max(0, Math.floor(centerY - sh / 2));
 
-          // Reuse a single temp graphics buffer, resizing as needed
-          // This is much more efficient than creating a new one each iteration
-          if (!buffer || buffer.width !== sw || buffer.height !== sh) {
-            if (buffer) buffer.remove();
-            buffer = p.createGraphics(sw, sh);
-          }
+            // Reuse a single temp graphics buffer, resizing as needed
+            // This is much more efficient than creating a new one each iteration
+            if (!buffer || buffer.width !== sw || buffer.height !== sh) {
+              if (buffer) buffer.remove();
+              buffer = p.createGraphics(sw, sh);
+            }
 
-          buffer.clear();
-          buffer.push();
-          buffer.drawingContext.save();
-          buffer.drawingContext.beginPath();
-          buffer.drawingContext.ellipse(
-            sw / 2,
-            sh / 2,
-            sw / 2,
-            sh / 2,
-            0,
-            0,
-            Math.PI * 2
-          );
-          buffer.drawingContext.clip();
-          buffer.image(patternImg, 0, 0, sw, sh, sx, sy, sw, sh);
-          buffer.drawingContext.restore();
-          buffer.pop();
+            buffer.clear();
+            buffer.push();
+            buffer.drawingContext.save();
+            buffer.drawingContext.beginPath();
+            buffer.drawingContext.ellipse(
+              sw / 2,
+              sh / 2,
+              sw / 2,
+              sh / 2,
+              0,
+              0,
+              Math.PI * 2
+            );
+            buffer.drawingContext.clip();
+            buffer.image(patternImg, 0, 0, sw, sh, sx, sy, sw, sh);
+            buffer.drawingContext.restore();
+            buffer.pop();
 
-          // composite into display, centered at image center
-          display.push();
-          display.imageMode(display.CENTER);
-          display.translate(centerX, centerY);
-          display.rotate(currentRotation);
-          display.image(buffer, 0, 0);
-          display.pop();
+            // composite into display, centered at image center
+            display.push();
+            display.imageMode(display.CENTER);
+            display.translate(centerX, centerY);
+            display.rotate(currentRotation);
+            display.image(buffer, 0, 0);
+            display.pop();
           }
         }
       } // Close the "if sliceCenterX !== null" conditional
