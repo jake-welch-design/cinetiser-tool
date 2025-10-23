@@ -29,7 +29,21 @@ export default function sketch(p) {
 
   // Rotation transition state
   let rotationTransitionStart = null; // timestamp when rotation starts
-  const ROTATION_TRANSITION_DURATION = 1000; // milliseconds (1 second)
+  let rotationTransitionDuration = 1000; // milliseconds (1 second) - updated based on rotationSpeed
+
+  // Pattern image caching for performance
+  let patternImg = null;
+  let lastPatternPosX = null;
+  let lastPatternPosY = null;
+  let lastPatternZoom = null;
+
+  // Display layer caching - track if we need to redraw
+  let lastCutSize = null;
+  let lastSliceAmount = null;
+  let lastRotationAmount = null;
+  let lastDisplayPosX = null;
+  let lastDisplayPosY = null;
+  let lastDisplayZoom = null;
 
   // Effect parameters (can be hooked to GUI later)
   let bg = 0;
@@ -70,6 +84,139 @@ export default function sketch(p) {
     p.background(0);
 
     if (loadedImage) {
+      // Check if we need to do heavy rendering
+      // If animation is off and slices are placed, we only need to render on first frame
+      const isAnimatedMode =
+        params.animated !== undefined ? params.animated : true;
+      const hasSlices = sliceCenterX !== null && sliceCenterY !== null;
+
+      // Check if ring parameters have changed
+      const ringParametersChanged =
+        lastCutSize !== params.cutSize ||
+        lastSliceAmount !== params.sliceAmount ||
+        lastRotationAmount !== params.rotationAmount;
+
+      // Check if image position or zoom has changed
+      const imageTransformChanged =
+        lastDisplayPosX !== params.imagePosX ||
+        lastDisplayPosY !== params.imagePosY ||
+        lastDisplayZoom !== params.imageZoom;
+
+      // Skip rendering if animation is off, slices are placed, params haven't changed, and transition is done
+      if (
+        !isAnimatedMode &&
+        hasSlices &&
+        rotationTransitionStart === null &&
+        !ringParametersChanged &&
+        !imageTransformChanged
+      ) {
+        // Draw base image first
+        const posBounds = calculatePositionBounds(
+          loadedImage.width,
+          loadedImage.height,
+          p.width,
+          p.height,
+          params.imageZoom
+        );
+
+        const posX = Math.max(
+          posBounds.minX,
+          Math.min(posBounds.maxX, params.imagePosX || 0)
+        );
+        const posY = Math.max(
+          posBounds.minY,
+          Math.min(posBounds.maxY, params.imagePosY || 0)
+        );
+
+        drawImageCover(
+          p,
+          loadedImage,
+          p.width,
+          p.height,
+          posX,
+          posY,
+          params.imageZoom
+        );
+
+        // Then draw the cached display layer on top
+        p.imageMode(p.CORNER);
+        p.image(display, 0, 0, p.width, p.height);
+
+        // Draw cursor preview if needed
+        if (showCursorPreview) {
+          // Calculate and draw preview ellipse (lightweight operation)
+          const coverDims = calculateCoverDimensions(
+            loadedImage.width,
+            loadedImage.height,
+            p.width,
+            p.height
+          );
+
+          const posBounds = calculatePositionBounds(
+            loadedImage.width,
+            loadedImage.height,
+            p.width,
+            p.height,
+            params.imageZoom
+          );
+
+          const posX = Math.max(
+            posBounds.minX,
+            Math.min(posBounds.maxX, params.imagePosX || 0)
+          );
+          const posY = Math.max(
+            posBounds.minY,
+            Math.min(posBounds.maxY, params.imagePosY || 0)
+          );
+
+          const zoomedImageWidth = coverDims.width * params.imageZoom;
+          const zoomedImageHeight = coverDims.height * params.imageZoom;
+
+          const imageCenterX = p.width / 2 + posX;
+          const imageCenterY = p.height / 2 + posY;
+
+          const imageLeft = imageCenterX - zoomedImageWidth / 2;
+          const imageRight = imageCenterX + zoomedImageWidth / 2;
+          const imageTop = imageCenterY - zoomedImageHeight / 2;
+          const imageBottom = imageCenterY + zoomedImageHeight / 2;
+
+          let previewCutSize = Math.max(1, params.cutSize || 300);
+          const maxAllowedDiameter = Math.min(
+            zoomedImageWidth,
+            zoomedImageHeight
+          );
+          if (previewCutSize > maxAllowedDiameter) {
+            previewCutSize = maxAllowedDiameter;
+          }
+
+          // Reduce preview size by one ring thickness to show the innermost drawable ring
+          const sliceAmount = Math.max(1, Math.floor(params.sliceAmount || 10));
+          const ringThickness = previewCutSize / sliceAmount;
+          const adjustedPreviewSize = previewCutSize - ringThickness;
+
+          const cutSizeRadius = adjustedPreviewSize / 2;
+
+          const clampedCursorX = Math.max(
+            imageLeft + cutSizeRadius,
+            Math.min(imageRight - cutSizeRadius, cursorX)
+          );
+          const clampedCursorY = Math.max(
+            imageTop + cutSizeRadius,
+            Math.min(imageBottom - cutSizeRadius, cursorY)
+          );
+
+          p.stroke(255, 0, 0);
+          p.strokeWeight(1);
+          p.noFill();
+          p.ellipse(
+            clampedCursorX,
+            clampedCursorY,
+            adjustedPreviewSize,
+            adjustedPreviewSize
+          );
+        }
+        return; // Skip the rest of rendering
+      }
       // Compute allowed position bounds and clamp image offsets to avoid black edges
       const posBounds = calculatePositionBounds(
         loadedImage.width,
@@ -100,20 +247,33 @@ export default function sketch(p) {
       );
 
       // Render the source image into an offscreen layer (imgLayer) using the same clamped cover/position/zoom
-      imgLayer.clear();
-      // drawImageCover is instance-aware; pass imgLayer so it draws into the pgraphics with the same transform
-      drawImageCover(
-        imgLayer,
-        loadedImage,
-        imgLayer.width,
-        imgLayer.height,
-        posX,
-        posY,
-        params.imageZoom
-      );
+      // Only regenerate if position or zoom changed
+      const needsPatternUpdate =
+        lastPatternPosX !== posX ||
+        lastPatternPosY !== posY ||
+        lastPatternZoom !== params.imageZoom;
 
-      // Convert pgraphics to p.Image for use with copy/clip
-      const patternImg = imgLayer.get();
+      if (needsPatternUpdate) {
+        imgLayer.clear();
+        // drawImageCover is instance-aware; pass imgLayer so it draws into the pgraphics with the same transform
+        drawImageCover(
+          imgLayer,
+          loadedImage,
+          imgLayer.width,
+          imgLayer.height,
+          posX,
+          posY,
+          params.imageZoom
+        );
+
+        // Convert pgraphics to p.Image for use with copy/clip
+        patternImg = imgLayer.get();
+
+        // Cache the values
+        lastPatternPosX = posX;
+        lastPatternPosY = posY;
+        lastPatternZoom = params.imageZoom;
+      }
 
       // Prepare display layer
       display.clear();
@@ -156,11 +316,6 @@ export default function sketch(p) {
       // maxDiameter is the outer size of the largest ring
       let maxDiameter = cutSize;
 
-      // Determine rotation amount and speed from params
-      const rotationAmount = params.rotationAmount || rotAmt;
-      const rotationSpeed = params.rotationSpeed || speed;
-      const isAnimated = params.animated !== undefined ? params.animated : true;
-
       // Only render slices if user has clicked to place them
       if (sliceCenterX !== null && sliceCenterY !== null) {
         // Build circular, rotating layers into `display` sampling from patternImg
@@ -202,12 +357,32 @@ export default function sketch(p) {
         const centerX = clampedCenterX;
         const centerY = clampedCenterY;
 
+        // Determine rotation amount and speed from params
+        // Use proper null/undefined check for rotationAmount so 0 is not treated as falsy
+        const rotationAmount =
+          params.rotationAmount !== undefined
+            ? params.rotationAmount
+            : rotAmt;
+        const rotationSpeed = params.rotationSpeed || speed;
+        const isAnimated =
+          params.animated !== undefined ? params.animated : true;
+
+        // Calculate transition duration based on rotation speed
+        // Match lerp speed to animation oscillation speed
+        // The animation completes one full cycle when p.frameCount * rotationSpeed goes from 0 to 2π
+        // We want the lerp to complete in roughly 2-3 animation cycles for visual harmony
+        // Duration (ms) = (2π / rotationSpeed) / frameRate * 2.5 cycles
+        const frameRate = 60; // p5.js default
+        const cycleDuration =
+          ((Math.PI * 2) / Math.max(rotationSpeed, 0.0001) / frameRate) * 1000;
+        rotationTransitionDuration = Math.max(500, cycleDuration * 0.05);
+
         // Calculate rotation lerp progress (0 to 1)
         let rotationProgress = 1.0; // Default to full rotation
         if (rotationTransitionStart !== null) {
           const elapsed = p.millis() - rotationTransitionStart;
           rotationProgress = Math.min(
-            elapsed / ROTATION_TRANSITION_DURATION,
+            elapsed / rotationTransitionDuration,
             1.0
           );
           // Stop tracking transition once complete
@@ -216,7 +391,10 @@ export default function sketch(p) {
           }
         }
 
-        for (let i = 0; i < sliceAmount; i++) {
+        // Only render slices if rotation amount is greater than 0
+        // When rotation amount is 0, no cinetisation effect is visible
+        if (rotationAmount > 0) {
+          for (let i = 0; i < sliceAmount; i++) {
           // Each ring gets progressively smaller from the outer edge
           const currentSize = maxDiameter - i * ringThickness;
 
@@ -242,13 +420,18 @@ export default function sketch(p) {
           const sx = Math.max(0, Math.floor(centerX - sw / 2));
           const sy = Math.max(0, Math.floor(centerY - sh / 2));
 
-          // create temp graphics the size of the ring and copy clipped circle
-          const temp = p.createGraphics(sw, sh);
-          temp.clear();
-          temp.push();
-          temp.drawingContext.save();
-          temp.drawingContext.beginPath();
-          temp.drawingContext.ellipse(
+          // Reuse a single temp graphics buffer, resizing as needed
+          // This is much more efficient than creating a new one each iteration
+          if (!buffer || buffer.width !== sw || buffer.height !== sh) {
+            if (buffer) buffer.remove();
+            buffer = p.createGraphics(sw, sh);
+          }
+
+          buffer.clear();
+          buffer.push();
+          buffer.drawingContext.save();
+          buffer.drawingContext.beginPath();
+          buffer.drawingContext.ellipse(
             sw / 2,
             sh / 2,
             sw / 2,
@@ -257,20 +440,31 @@ export default function sketch(p) {
             0,
             Math.PI * 2
           );
-          temp.drawingContext.clip();
-          temp.image(patternImg, 0, 0, sw, sh, sx, sy, sw, sh);
-          temp.drawingContext.restore();
-          temp.pop();
+          buffer.drawingContext.clip();
+          buffer.image(patternImg, 0, 0, sw, sh, sx, sy, sw, sh);
+          buffer.drawingContext.restore();
+          buffer.pop();
 
           // composite into display, centered at image center
           display.push();
           display.imageMode(display.CENTER);
           display.translate(centerX, centerY);
           display.rotate(currentRotation);
-          display.image(temp, 0, 0);
+          display.image(buffer, 0, 0);
           display.pop();
+          }
         }
       } // Close the "if sliceCenterX !== null" conditional
+
+      // Cache the ring parameters for next frame comparison
+      lastCutSize = params.cutSize;
+      lastSliceAmount = params.sliceAmount;
+      lastRotationAmount = params.rotationAmount;
+
+      // Cache the display transform for next frame comparison
+      lastDisplayPosX = params.imagePosX;
+      lastDisplayPosY = params.imagePosY;
+      lastDisplayZoom = params.imageZoom;
 
       // Draw the composed display layer onto the main canvas on top of base image
       p.imageMode(p.CORNER);
@@ -309,7 +503,12 @@ export default function sketch(p) {
           previewCutSize = maxAllowedDiameter;
         }
 
-        const cutSizeRadius = previewCutSize / 2;
+        // Reduce preview size by one ring thickness to show the innermost drawable ring
+        const sliceAmount = Math.max(1, Math.floor(params.sliceAmount || 10));
+        const ringThickness = previewCutSize / sliceAmount;
+        const adjustedPreviewSize = previewCutSize - ringThickness;
+
+        const cutSizeRadius = adjustedPreviewSize / 2;
 
         const clampedCursorX = Math.max(
           imageLeft + cutSizeRadius,
@@ -326,8 +525,8 @@ export default function sketch(p) {
         p.ellipse(
           clampedCursorX,
           clampedCursorY,
-          previewCutSize,
-          previewCutSize
+          adjustedPreviewSize,
+          adjustedPreviewSize
         );
       }
     } else {
@@ -351,6 +550,78 @@ export default function sketch(p) {
 
   // Handle canvas click to place slices
   p.mousePressed = function () {
+    // Use elementFromPoint as primary detection method
+    // Convert p5 mouse coordinates to page coordinates
+    const canvasRect = canvasElement.getBoundingClientRect();
+    const pageX = canvasRect.left + p.mouseX;
+    const pageY = canvasRect.top + p.mouseY;
+
+    const clickTarget = document.elementFromPoint(pageX, pageY);
+
+    // Check if click is on any interactive element
+    if (clickTarget) {
+      // Direct checks for common GUI elements
+      if (
+        clickTarget.tagName === "INPUT" ||
+        clickTarget.tagName === "BUTTON" ||
+        clickTarget.tagName === "LABEL" ||
+        clickTarget.tagName === "SELECT"
+      ) {
+        return; // Let the form control handle it
+      }
+
+      // Check if it's a child of any interactive container
+      if (clickTarget.closest("input, button, label, select, textarea")) {
+        return; // Let the interactive element handle it
+      }
+
+      // Check if it's in the GUI container
+      if (
+        clickTarget.closest("#gui-container") ||
+        clickTarget.closest("#gui-panel") ||
+        clickTarget.closest("#controls-section")
+      ) {
+        return; // Let the GUI handle it
+      }
+
+      // Check for switch/checkbox elements specifically
+      if (
+        clickTarget.closest(".switch") ||
+        clickTarget.closest(".range-container")
+      ) {
+        return; // Let the GUI element handle it
+      }
+    }
+
+    // Additional fallback: check GUI panel bounds directly
+    const guiPanel = document.getElementById("gui-panel");
+    if (guiPanel && guiPanel.classList.contains("open")) {
+      const guiRect = guiPanel.getBoundingClientRect();
+      // If click is within GUI panel bounds, ignore it
+      if (
+        pageX >= guiRect.left &&
+        pageX <= guiRect.right &&
+        pageY >= guiRect.top &&
+        pageY <= guiRect.bottom
+      ) {
+        return; // Click is on the GUI panel
+      }
+    }
+
+    // Check GUI toggle button
+    const guiToggle = document.getElementById("gui-toggle");
+    if (guiToggle) {
+      const toggleRect = guiToggle.getBoundingClientRect();
+      if (
+        pageX >= toggleRect.left &&
+        pageX <= toggleRect.right &&
+        pageY >= toggleRect.top &&
+        pageY <= toggleRect.bottom
+      ) {
+        return; // Click is on the toggle button
+      }
+    }
+
     if (
       loadedImage &&
       p.mouseX >= 0 &&
@@ -463,6 +734,7 @@ export default function sketch(p) {
       // Update zoom and position slider bounds based on image dimensions
       updateZoomSliderBounds();
       updatePositionSliderBounds();
+      updateCutSizeSliderBounds();
     });
   }
 
@@ -507,6 +779,29 @@ export default function sketch(p) {
     gui.updateParameterValue("imagePosY", 0);
   }
 
+  // Update the max value of cut size slider based on image and canvas dimensions
+  function updateCutSizeSliderBounds() {
+    if (!loadedImage) return;
+
+    const coverDims = calculateCoverDimensions(
+      loadedImage.width,
+      loadedImage.height,
+      params.canvasWidth,
+      params.canvasHeight
+    );
+
+    const zoomedImageWidth = coverDims.width * params.imageZoom;
+    const zoomedImageHeight = coverDims.height * params.imageZoom;
+
+    // Maximum diameter is the smaller of width or height of the zoomed image
+    const maxDiameter = Math.min(zoomedImageWidth, zoomedImageHeight);
+
+    // Update cut size slider max to the calculated maximum
+    gui.updateSliderBounds("cutSize", 100, maxDiameter);
+
+    console.log(`Cut size bounds updated: max=${maxDiameter.toFixed(1)}`);
+  }
+
   function handleParameterChange(paramName, value, allParameters) {
     params = allParameters;
     console.log(`Parameter ${paramName} changed to ${value}`);
@@ -521,14 +816,26 @@ export default function sketch(p) {
       imgLayer = p.createGraphics(params.canvasWidth, params.canvasHeight);
       display = p.createGraphics(params.canvasWidth, params.canvasHeight);
 
+      // Clear slice placement since coordinates are now invalid in new canvas
+      sliceCenterX = null;
+      sliceCenterY = null;
+      rotationTransitionStart = null;
+
+      // Invalidate pattern cache since canvas size changed
+      lastPatternPosX = null;
+      lastPatternPosY = null;
+      lastPatternZoom = null;
+
       // Update zoom and position slider bounds when canvas size changes
       updateZoomSliderBounds();
       updatePositionSliderBounds();
+      updateCutSizeSliderBounds();
     }
 
-    // Update position slider bounds when zoom changes
+    // Update slider bounds when zoom changes
     if (paramName === "imageZoom") {
       updatePositionSliderBounds();
+      updateCutSizeSliderBounds();
     }
   }
 

@@ -76,7 +76,7 @@ export const GUI_CONFIG = {
   // Rotation amount (degrees)
   rotationAmount: {
     default: 10,
-    min: -45,
+    min: 0,
     max: 45,
     step: 1,
     label: "Rotation amount",
