@@ -5,6 +5,7 @@ import {
   drawImageContain,
   calculatePositionBounds,
   calculateMinZoom,
+  calculateCoverDimensions,
 } from "./modules/image-processor.js";
 
 // p5.js Sketch - Instance Mode
@@ -18,6 +19,17 @@ export default function sketch(p) {
   let buffer = null;
   let imgLayer = null;
   let display = null; // replaced "tile" — this will be drawn onto the main canvas
+
+  // Cursor preview and slice placement state
+  let showCursorPreview = false;
+  let cursorX = 0;
+  let cursorY = 0;
+  let sliceCenterX = null; // null means center, or explicit click position
+  let sliceCenterY = null;
+
+  // Rotation transition state
+  let rotationTransitionStart = null; // timestamp when rotation starts
+  const ROTATION_TRANSITION_DURATION = 1000; // milliseconds (1 second)
 
   // Effect parameters (can be hooked to GUI later)
   let bg = 0;
@@ -109,85 +121,215 @@ export default function sketch(p) {
       // Animation angle (oscillates)
       const angle = p.map(p.sin(p.frameCount * speed), -1, 1, -rotAmt, rotAmt);
 
-      // Use GUI parameters for slice size and amount
-      let sliceSize = Math.max(1, params.sliceSize || 50);
-      const requestedAmount = Math.max(1, Math.floor(params.sliceAmount || 5));
+      // Use GUI parameters for cut size and slice amount
+      // cutSize is the outer diameter of the largest ring
+      // sliceAmount is the number of divisions within that size
+      let cutSize = Math.max(1, params.cutSize || 300);
+      const sliceAmount = Math.max(1, Math.floor(params.sliceAmount || 10));
 
-      // Determine the canvas limit and if requestedAmount * sliceSize exceeds it, clamp sliceSize
-      const canvasMinDim = Math.min(p.width, p.height);
-      let effectiveAmount = requestedAmount;
-      let maxDiameter = sliceSize * effectiveAmount;
-      if (maxDiameter > canvasMinDim) {
-        // Prefer keeping the requested number of slices; scale down sliceSize so total fits
-        sliceSize = canvasMinDim / requestedAmount;
-        // ensure sliceSize is at least 1 pixel
-        sliceSize = Math.max(1, sliceSize);
-        maxDiameter = sliceSize * requestedAmount;
+      // Clamp cutSize to fit within image bounds
+      // Calculate image bounds to get maximum allowable diameter
+      if (loadedImage) {
+        const coverDims = calculateCoverDimensions(
+          loadedImage.width,
+          loadedImage.height,
+          p.width,
+          p.height
+        );
+
+        const zoomedImageWidth = coverDims.width * params.imageZoom;
+        const zoomedImageHeight = coverDims.height * params.imageZoom;
+
+        // Maximum diameter is the smaller of width or height of the zoomed image
+        const maxAllowedDiameter = Math.min(
+          zoomedImageWidth,
+          zoomedImageHeight
+        );
+        if (cutSize > maxAllowedDiameter) {
+          cutSize = maxAllowedDiameter;
+        }
       }
+
+      // Calculate ring thickness (distance between consecutive rings)
+      const ringThickness = cutSize / sliceAmount;
+
+      // maxDiameter is the outer size of the largest ring
+      let maxDiameter = cutSize;
 
       // Determine rotation amount and speed from params
       const rotationAmount = params.rotationAmount || rotAmt;
       const rotationSpeed = params.rotationSpeed || speed;
       const isAnimated = params.animated !== undefined ? params.animated : true;
 
-      // Build circular, rotating layers into `display` sampling from patternImg
-      // ring center should be based on the clamped image position so slices anchor to visible image
-      const centerX = p.width / 2 + posX;
-      const centerY = p.height / 2 + posY;
-
-      for (let i = 0; i < requestedAmount; i++) {
-        const currentSize = maxDiameter - i * sliceSize;
-        const currentRotation = p.radians(
-          (isAnimated
-            ? p.map(
-                p.sin(p.frameCount * rotationSpeed),
-                -1,
-                1,
-                -rotationAmount,
-                rotationAmount
-              )
-            : rotationAmount) * i
+      // Only render slices if user has clicked to place them
+      if (sliceCenterX !== null && sliceCenterY !== null) {
+        // Build circular, rotating layers into `display` sampling from patternImg
+        // Calculate image bounds on canvas to clamp slice center position
+        const coverDims = calculateCoverDimensions(
+          loadedImage.width,
+          loadedImage.height,
+          p.width,
+          p.height
         );
 
-        const sw = Math.max(1, Math.floor(currentSize));
-        const sh = Math.max(1, Math.floor(currentSize));
+        // Apply zoom to get actual displayed dimensions
+        const zoomedImageWidth = coverDims.width * params.imageZoom;
+        const zoomedImageHeight = coverDims.height * params.imageZoom;
 
-        // sample top-left coordinates on the pattern image
-        const sx = Math.max(0, Math.floor(centerX - sw / 2));
-        const sy = Math.max(0, Math.floor(centerY - sh / 2));
+        // Image is centered at (p.width/2 + posX, p.height/2 + posY)
+        const imageCenterX = p.width / 2 + posX;
+        const imageCenterY = p.height / 2 + posY;
 
-        // create temp graphics the size of the ring and copy clipped circle
-        const temp = p.createGraphics(sw, sh);
-        temp.clear();
-        temp.push();
-        temp.drawingContext.save();
-        temp.drawingContext.beginPath();
-        temp.drawingContext.ellipse(
-          sw / 2,
-          sh / 2,
-          sw / 2,
-          sh / 2,
-          0,
-          0,
-          Math.PI * 2
+        // Image bounds in canvas space
+        const imageLeft = imageCenterX - zoomedImageWidth / 2;
+        const imageRight = imageCenterX + zoomedImageWidth / 2;
+        const imageTop = imageCenterY - zoomedImageHeight / 2;
+        const imageBottom = imageCenterY + zoomedImageHeight / 2;
+
+        // Clamp slice center to stay within image bounds
+        // Use same logic as preview: just the radius
+        const maxRadius = maxDiameter / 2;
+
+        const clampedCenterX = Math.max(
+          imageLeft + maxRadius,
+          Math.min(imageRight - maxRadius, sliceCenterX)
         );
-        temp.drawingContext.clip();
-        temp.image(patternImg, 0, 0, sw, sh, sx, sy, sw, sh);
-        temp.drawingContext.restore();
-        temp.pop();
+        const clampedCenterY = Math.max(
+          imageTop + maxRadius,
+          Math.min(imageBottom - maxRadius, sliceCenterY)
+        );
 
-        // composite into display, centered at image center
-        display.push();
-        display.imageMode(display.CENTER);
-        display.translate(centerX, centerY);
-        display.rotate(currentRotation);
-        display.image(temp, 0, 0);
-        display.pop();
-      }
+        const centerX = clampedCenterX;
+        const centerY = clampedCenterY;
+
+        // Calculate rotation lerp progress (0 to 1)
+        let rotationProgress = 1.0; // Default to full rotation
+        if (rotationTransitionStart !== null) {
+          const elapsed = p.millis() - rotationTransitionStart;
+          rotationProgress = Math.min(
+            elapsed / ROTATION_TRANSITION_DURATION,
+            1.0
+          );
+          // Stop tracking transition once complete
+          if (rotationProgress >= 1.0) {
+            rotationTransitionStart = null;
+          }
+        }
+
+        for (let i = 0; i < sliceAmount; i++) {
+          // Each ring gets progressively smaller from the outer edge
+          const currentSize = maxDiameter - i * ringThickness;
+
+          // Lerp rotation amount based on transition progress
+          const lerpedRotationAmount = rotationAmount * rotationProgress;
+
+          const currentRotation = p.radians(
+            (isAnimated
+              ? p.map(
+                  p.sin(p.frameCount * rotationSpeed),
+                  -1,
+                  1,
+                  -lerpedRotationAmount,
+                  lerpedRotationAmount
+                )
+              : lerpedRotationAmount) * i
+          );
+
+          const sw = Math.max(1, Math.floor(currentSize));
+          const sh = Math.max(1, Math.floor(currentSize));
+
+          // sample top-left coordinates on the pattern image
+          const sx = Math.max(0, Math.floor(centerX - sw / 2));
+          const sy = Math.max(0, Math.floor(centerY - sh / 2));
+
+          // create temp graphics the size of the ring and copy clipped circle
+          const temp = p.createGraphics(sw, sh);
+          temp.clear();
+          temp.push();
+          temp.drawingContext.save();
+          temp.drawingContext.beginPath();
+          temp.drawingContext.ellipse(
+            sw / 2,
+            sh / 2,
+            sw / 2,
+            sh / 2,
+            0,
+            0,
+            Math.PI * 2
+          );
+          temp.drawingContext.clip();
+          temp.image(patternImg, 0, 0, sw, sh, sx, sy, sw, sh);
+          temp.drawingContext.restore();
+          temp.pop();
+
+          // composite into display, centered at image center
+          display.push();
+          display.imageMode(display.CENTER);
+          display.translate(centerX, centerY);
+          display.rotate(currentRotation);
+          display.image(temp, 0, 0);
+          display.pop();
+        }
+      } // Close the "if sliceCenterX !== null" conditional
 
       // Draw the composed display layer onto the main canvas on top of base image
       p.imageMode(p.CORNER);
       p.image(display, 0, 0, p.width, p.height);
+
+      // Draw cursor preview ellipse if image is loaded and mouse is within canvas
+      if (showCursorPreview) {
+        // Calculate image bounds to clamp cursor preview
+        const coverDims = calculateCoverDimensions(
+          loadedImage.width,
+          loadedImage.height,
+          p.width,
+          p.height
+        );
+
+        const zoomedImageWidth = coverDims.width * params.imageZoom;
+        const zoomedImageHeight = coverDims.height * params.imageZoom;
+
+        const imageCenterX = p.width / 2 + posX;
+        const imageCenterY = p.height / 2 + posY;
+
+        const imageLeft = imageCenterX - zoomedImageWidth / 2;
+        const imageRight = imageCenterX + zoomedImageWidth / 2;
+        const imageTop = imageCenterY - zoomedImageHeight / 2;
+        const imageBottom = imageCenterY + zoomedImageHeight / 2;
+
+        // Clamp cursor position to image bounds
+        // For the preview ellipse itself (not rotated), we just need the radius
+        // Also clamp the cutSize to image bounds
+        let previewCutSize = Math.max(1, params.cutSize || 300);
+        const maxAllowedDiameter = Math.min(
+          zoomedImageWidth,
+          zoomedImageHeight
+        );
+        if (previewCutSize > maxAllowedDiameter) {
+          previewCutSize = maxAllowedDiameter;
+        }
+
+        const cutSizeRadius = previewCutSize / 2;
+
+        const clampedCursorX = Math.max(
+          imageLeft + cutSizeRadius,
+          Math.min(imageRight - cutSizeRadius, cursorX)
+        );
+        const clampedCursorY = Math.max(
+          imageTop + cutSizeRadius,
+          Math.min(imageBottom - cutSizeRadius, cursorY)
+        );
+
+        p.stroke(255, 0, 0); // Red stroke
+        p.strokeWeight(1);
+        p.noFill();
+        p.ellipse(
+          clampedCursorX,
+          clampedCursorY,
+          previewCutSize,
+          previewCutSize
+        );
+      }
     } else {
       // Placeholder text
       p.fill(255);
@@ -195,6 +337,84 @@ export default function sketch(p) {
       p.textAlign(p.CENTER, p.CENTER);
       p.textSize(16);
       p.text("Upload an image to begin", p.width / 2, p.height / 2);
+    }
+  };
+
+  // Track mouse movement to show preview
+  p.mouseMoved = function () {
+    if (loadedImage) {
+      cursorX = p.mouseX;
+      cursorY = p.mouseY;
+      showCursorPreview = true;
+    }
+  };
+
+  // Handle canvas click to place slices
+  p.mousePressed = function () {
+    if (
+      loadedImage &&
+      p.mouseX >= 0 &&
+      p.mouseX <= p.width &&
+      p.mouseY >= 0 &&
+      p.mouseY <= p.height
+    ) {
+      // Calculate image bounds and clamp click position to image
+      const posBounds = calculatePositionBounds(
+        loadedImage.width,
+        loadedImage.height,
+        p.width,
+        p.height,
+        params.imageZoom
+      );
+
+      const posX = Math.max(
+        posBounds.minX,
+        Math.min(posBounds.maxX, params.imagePosX || 0)
+      );
+      const posY = Math.max(
+        posBounds.minY,
+        Math.min(posBounds.maxY, params.imagePosY || 0)
+      );
+
+      const coverDims = calculateCoverDimensions(
+        loadedImage.width,
+        loadedImage.height,
+        p.width,
+        p.height
+      );
+
+      const zoomedImageWidth = coverDims.width * params.imageZoom;
+      const zoomedImageHeight = coverDims.height * params.imageZoom;
+
+      const imageCenterX = p.width / 2 + posX;
+      const imageCenterY = p.height / 2 + posY;
+
+      const imageLeft = imageCenterX - zoomedImageWidth / 2;
+      const imageRight = imageCenterX + zoomedImageWidth / 2;
+      const imageTop = imageCenterY - zoomedImageHeight / 2;
+      const imageBottom = imageCenterY + zoomedImageHeight / 2;
+
+      // Clamp click position to image bounds
+      // For the ellipse (not rotated), we just need the radius
+      const cutSizeRadius = params.cutSize / 2;
+
+      const clampedClickX = Math.max(
+        imageLeft + cutSizeRadius,
+        Math.min(imageRight - cutSizeRadius, p.mouseX)
+      );
+      const clampedClickY = Math.max(
+        imageTop + cutSizeRadius,
+        Math.min(imageBottom - cutSizeRadius, p.mouseY)
+      );
+
+      // Set slice center to clamped click position
+      sliceCenterX = clampedClickX;
+      sliceCenterY = clampedClickY;
+      // Start rotation transition when slices are placed
+      rotationTransitionStart = p.millis();
+      // Hide cursor preview after clicking
+      showCursorPreview = false;
+      return false; // Prevent default p5 behavior
     }
   };
 

@@ -53,19 +53,19 @@ export const GUI_CONFIG = {
     section: "image",
   },
 
-  // Cinetisation: diameter (thickness) of each slice/ring
-  sliceSize: {
-    default: 50,
-    min: 1,
-    max: 100,
+  // Cinetisation: outer diameter of the largest ring
+  cutSize: {
+    default: 300,
+    min: 100,
+    max: 1920,
     step: 1,
-    label: "Slice size",
+    label: "Cut size",
     section: "cinetisation",
   },
 
-  // Cinetisation: number of slices/rings (min 1)
+  // Cinetisation: number of divisions within the cut size
   sliceAmount: {
-    default: 5,
+    default: 10,
     min: 1,
     max: 30,
     step: 1,

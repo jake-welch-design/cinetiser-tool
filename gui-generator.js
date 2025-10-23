@@ -95,6 +95,17 @@ function generateGUIControls() {
           </div>
         `;
       } else {
+        // Only show number input for canvas width and height
+        const showNumberInput = key === "canvasWidth" || key === "canvasHeight";
+        const numberInputHtml = showNumberInput
+          ? `<input type="number" 
+                   id="${key}Value" 
+                   min="${config.min}" 
+                   max="${config.max}" 
+                   step="${config.step}" 
+                   value="${config.default}">`
+          : "";
+
         containerDiv.innerHTML = `
           <label>${config.label}:</label>
           <div>
@@ -104,12 +115,7 @@ function generateGUIControls() {
                    max="${config.max}" 
                    step="${config.step}" 
                    value="${config.default}">
-            <input type="number" 
-                   id="${key}Value" 
-                   min="${config.min}" 
-                   max="${config.max}" 
-                   step="${config.step}" 
-                   value="${config.default}">
+            ${numberInputHtml}
           </div>
         `;
       }

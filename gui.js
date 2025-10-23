@@ -54,9 +54,12 @@ class GUIController {
           this.controls[paramKey] = { slider };
           console.log(`✓ Checkbox control registered for: ${paramKey}`);
         } else {
-          // Ensure numeric input exists; if not, create one and append next to slider
+          // Only create numeric inputs for canvas width and height
+          const shouldHaveNumberInput =
+            paramKey === "canvasWidth" || paramKey === "canvasHeight";
           let numericInput = input;
-          if (!numericInput) {
+
+          if (!numericInput && shouldHaveNumberInput) {
             numericInput = document.createElement("input");
             numericInput.type = "number";
             numericInput.id = paramKey + "Value";
@@ -77,7 +80,11 @@ class GUIController {
             }
             console.log(`ℹ️ Created numeric input for ${paramKey}`);
           }
-          this.controls[paramKey] = { slider, input: numericInput };
+
+          this.controls[paramKey] = {
+            slider,
+            input: numericInput || null,
+          };
           console.log(`✓ Control registered for: ${paramKey}`);
         }
       } else {
@@ -116,7 +123,7 @@ class GUIController {
     Object.keys(this.controls).forEach((param) => {
       const control = this.controls[param];
 
-      // If this control has both slider and numeric input (normal range control)
+      // If this control has both slider and numeric input (canvas dimensions only)
       if (control.slider && control.input) {
         // Sync slider and number input with validation
         control.slider.addEventListener("input", (e) => {
@@ -133,17 +140,27 @@ class GUIController {
           this.onParameterChange(param, value);
         });
       } else if (control.slider && !control.input) {
-        // checkbox / boolean control
-        control.slider.addEventListener("change", (e) => {
-          const checked = e.target.checked;
-          this.parameters[param] = checked;
-          this.onParameterChange(param, checked);
+        // slider only (effect parameters) or checkbox / boolean control
+        if (GUI_CONFIG[param]?.type === "boolean") {
+          // checkbox / boolean control
+          control.slider.addEventListener("change", (e) => {
+            const checked = e.target.checked;
+            this.parameters[param] = checked;
+            this.onParameterChange(param, checked);
 
-          // If this is the animated toggle, enable/disable rotationSpeed control
-          if (param === "animated") {
-            this.toggleRotationSpeed(checked);
-          }
-        });
+            // If this is the animated toggle, enable/disable rotationSpeed control
+            if (param === "animated") {
+              this.toggleRotationSpeed(checked);
+            }
+          });
+        } else {
+          // slider only (effect parameters)
+          control.slider.addEventListener("input", (e) => {
+            const value = clampParameter(param, e.target.value);
+            this.parameters[param] = value;
+            this.onParameterChange(param, value);
+          });
+        }
       }
     });
 
