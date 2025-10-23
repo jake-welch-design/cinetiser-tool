@@ -1,24 +1,15 @@
-import {
-  getDefaultParameters,
-  GUI_CONFIG,
-  validateParameter,
-  clampParameter,
-} from "./modules/config.js";
+import { getDefaultParameters, GUI_CONFIG, clampParameter } from "./modules/config.js";
 
-// GUI
+/**
+ * GUI Controller - handles all GUI interactions
+ */
 class GUIController {
   constructor() {
-    this.depthMapFile = null;
-    this.displayImageFile = null;
+    this.imageFile = null;
     this.parameters = getDefaultParameters();
 
-    // Store processed images for reuse (to avoid re-running depth estimation)
-    this.generatedDepthMap = null;
-    this.loadedDisplayImage = null;
-
-    // Add throttling for live updates
-    this.updateThrottleTimeout = null;
-    this.THROTTLE_DELAY = 150; // milliseconds
+    // Reference to sketch instance (set by sketch.js)
+    this.sketch = null;
 
     this.initializeControls();
     this.setupEventListeners();
@@ -26,53 +17,66 @@ class GUIController {
 
   initializeControls() {
     // File input elements
-    this.depthMapInput = document.getElementById("depthMapInput");
-    this.displayImageInput = document.getElementById("displayImageInput");
-    this.depthMapPreview = document.getElementById("depthMapPreview");
-    this.displayImagePreview = document.getElementById("displayImagePreview");
+    this.imageInput = document.getElementById("imageInput");
 
-    // Parameter controls - dynamically updated from config.js
+    // Clear file input on page load
+    if (this.imageInput) {
+      this.imageInput.value = "";
+    }
+
+    // Parameter controls - dynamically created from config.js
     this.controls = {};
+    console.log("Looking for controls from GUI_CONFIG:", Object.keys(GUI_CONFIG));
+
     Object.keys(GUI_CONFIG).forEach((paramKey) => {
-      this.controls[paramKey] = {
-        slider: document.getElementById(paramKey),
-        input: document.getElementById(paramKey + "Value"),
-      };
+      const slider = document.getElementById(paramKey);
+      const input = document.getElementById(paramKey + "Value");
+
+      console.log(`Searching for ${paramKey}:`, {
+        sliderFound: !!slider,
+        inputFound: !!input,
+        sliderElement: slider,
+        inputElement: input,
+      });
+
+      if (slider && input) {
+        this.controls[paramKey] = { slider, input };
+        console.log(`✓ Control registered for: ${paramKey}`);
+      } else {
+        console.warn(`✗ Control not found for parameter: ${paramKey}`);
+      }
     });
 
+    console.log("Final controls object:", this.controls);
+
     // Buttons
-    this.generateBtn = document.getElementById("generateBtn");
     this.saveBtn = document.getElementById("saveBtn");
     this.guiToggleBtn = document.getElementById("gui-toggle");
     this.guiCloseBtn = document.getElementById("gui-close");
     this.guiPanel = document.getElementById("gui-panel");
 
-    // Guides elements
-    this.showGuidesCheckbox = document.getElementById("showGuides");
-    this.guidesElement = document.getElementById("guides");
-
-    // GUI toggle state (defaults to closed now)
-    this.isGuiOpen = false;
-    // Initialize GUI as closed
-    this.guiPanel.classList.add("hidden");
-    document.body.classList.add("gui-hidden");
-
-    // Initially disable generate button
-    this.generateBtn.disabled = true;
+    // GUI toggle state (defaults to open)
+    this.isGuiOpen = true;
+    if (this.guiPanel) {
+      this.guiPanel.classList.remove("hidden");
+    }
+    document.body.classList.remove("gui-hidden");
+    if (this.guiToggleBtn) {
+      this.guiToggleBtn.style.display = "none";
+    }
   }
 
   setupEventListeners() {
-    // File input handlers
-    this.depthMapInput.addEventListener("change", (e) =>
-      this.handleDepthMapUpload(e)
-    );
-    this.displayImageInput.addEventListener("change", (e) =>
-      this.handleDisplayImageUpload(e)
-    );
+    // File input handler
+    if (this.imageInput) {
+      this.imageInput.addEventListener("change", (e) => this.handleImageUpload(e));
+    }
 
     // Parameter control handlers
     Object.keys(this.controls).forEach((param) => {
       const control = this.controls[param];
+
+      if (!control.slider || !control.input) return;
 
       // Sync slider and number input with validation
       control.slider.addEventListener("input", (e) => {
@@ -90,415 +94,230 @@ class GUIController {
       });
     });
 
+    // Canvas preset buttons
+    const presetButtons = document.querySelectorAll(".canvas-preset-btn");
+    presetButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const width = parseInt(button.getAttribute("data-width"));
+        const height = parseInt(button.getAttribute("data-height"));
+        this.applyCanvasPreset(width, height);
+      });
+    });
+
     // Button handlers
-    this.generateBtn.addEventListener("click", () =>
-      this.generateComposition()
-    );
-    this.saveBtn.addEventListener("click", () => this.saveImage());
-    this.guiToggleBtn.addEventListener("click", () => this.openGui());
-    this.guiCloseBtn.addEventListener("click", () => this.closeGui());
+    if (this.saveBtn) {
+      this.saveBtn.addEventListener("click", () => this.saveImage());
+    }
+    if (this.guiToggleBtn) {
+      this.guiToggleBtn.addEventListener("click", () => this.openGui());
+    }
+    if (this.guiCloseBtn) {
+      this.guiCloseBtn.addEventListener("click", () => {
+        this.closeGui();
+      });
+    }
 
-    // Guides checkbox handler
-    this.showGuidesCheckbox.addEventListener("change", (e) =>
-      this.toggleGuides(e.target.checked)
-    );
-
-    // Keyboard shortcuts
+    // ESC key to close GUI
     document.addEventListener("keydown", (e) => {
-      if (e.key.toLowerCase() === "s") {
-        e.preventDefault();
-        this.saveImage();
+      if (e.key === "Escape" && this.isGuiOpen) {
+        this.closeGui();
       }
     });
   }
 
-  handleDepthMapUpload(event) {
-    const file = event.target.files[0];
-    if (file) {
-      this.depthMapFile = file;
-      this.previewImage(file, this.depthMapPreview);
-      this.checkGenerateReady();
+  applyCanvasPreset(width, height) {
+    // Update parameter values
+    this.parameters.canvasWidth = width;
+    this.parameters.canvasHeight = height;
+
+    // Update UI controls
+    if (this.controls.canvasWidth) {
+      this.controls.canvasWidth.slider.value = width;
+      this.controls.canvasWidth.input.value = width;
     }
+    if (this.controls.canvasHeight) {
+      this.controls.canvasHeight.slider.value = height;
+      this.controls.canvasHeight.input.value = height;
+    }
+
+    // Notify sketch
+    this.onParameterChange("canvasWidth", width);
+    this.onParameterChange("canvasHeight", height);
   }
 
-  handleDisplayImageUpload(event) {
+  handleImageUpload(event) {
     const file = event.target.files[0];
-    if (file) {
-      this.displayImageFile = file;
-      this.previewImage(file, this.displayImagePreview);
-      this.checkGenerateReady();
-    }
-  }
+    if (!file) return;
 
-  previewImage(file, previewElement) {
+    this.imageFile = file;
     const reader = new FileReader();
+
     reader.onload = (e) => {
-      previewElement.src = e.target.result;
-      previewElement.style.display = "block";
+      // Notify sketch if connected
+      if (this.sketch && this.sketch.onImageLoaded) {
+        this.sketch.onImageLoaded(e.target.result);
+      }
     };
+
     reader.readAsDataURL(file);
   }
 
-  checkGenerateReady() {
-    this.generateBtn.disabled = !(this.depthMapFile && this.displayImageFile);
-  }
-
-  async generateComposition() {
-    if (!this.depthMapFile || !this.displayImageFile) {
-      alert("Please select both source image and display image files.");
-      return;
-    }
-
-    try {
-      this.setLoadingState("Loading depth estimation model...");
-
-      // Check if depth detector is ready, if not initialize it
-      if (
-        window.depthMapExplorer &&
-        !window.depthMapExplorer.depthDetector.isReady()
-      ) {
-        if (!window.depthMapExplorer.depthDetector.isModelLoading()) {
-          await window.depthMapExplorer.depthDetector.initialize();
-        }
-      }
-
-      this.setLoadingState("Generating depth map...");
-
-      // Use depth detection to automatically generate depth map from source image
-      if (window.depthMapExplorer) {
-        await window.depthMapExplorer.updateCompositionWithDepthDetection(
-          this.depthMapFile, // for depth detection
-          this.displayImageFile, // for color
-          this.parameters,
-          // Callback to update depth map preview and store processed images
-          async (depthDataUrl) => {
-            this.updateDepthMapPreview(depthDataUrl);
-            this.setLoadingState("Creating 3D point cloud...");
-
-            // Store the generated depth map for reuse
-            this.generatedDepthMap = await this.loadImageFromDataUrl(
-              depthDataUrl
-            );
-
-            // Store the loaded display image for reuse
-            const displayImageURL = await this.fileToDataURL(
-              this.displayImageFile
-            );
-            this.loadedDisplayImage = await this.loadImageFromDataUrl(
-              displayImageURL
-            );
-          }
-        );
-      }
-    } catch (error) {
-      console.error("Error generating composition:", error);
-      alert(
-        "Error generating composition. Please check the console for details."
-      );
-    } finally {
-      this.clearLoadingState();
-    }
-  }
-
-  /**
-   * Set loading state with animation in main canvas area
-   */
-  setLoadingState(message) {
-    this.generateBtn.disabled = true;
-    this.generateBtn.textContent = message;
-
-    // Update the main loading element with animation
-    const loadingElement = document.getElementById("loading");
-    if (loadingElement) {
-      loadingElement.classList.add("loading");
-      loadingElement.innerHTML = `
-        <div>${message}</div>
-        <div class="loading-dots">
-          <div></div>
-          <div></div>
-          <div></div>
-          <div></div>
-        </div>
-      `;
-      loadingElement.classList.remove("hidden");
-    }
-  }
-
-  /**
-   * Clear loading state
-   */
-  clearLoadingState() {
-    this.generateBtn.disabled = false;
-    this.generateBtn.textContent = "Generate";
-
-    // Hide the loading element
-    const loadingElement = document.getElementById("loading");
-    if (loadingElement) {
-      loadingElement.classList.remove("loading");
-      loadingElement.classList.add("hidden");
-    }
-  }
-
-  /**
-   * Update the depth map preview with generated depth map
-   */
-  updateDepthMapPreview(depthDataUrl) {
-    if (this.depthMapPreview) {
-      this.depthMapPreview.src = depthDataUrl;
-      this.depthMapPreview.style.display = "block";
-    }
-  }
-
-  /**
-   * Load image from data URL
-   */
-  loadImageFromDataUrl(dataUrl) {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-      img.onload = () => resolve(img);
-      img.onerror = reject;
-      img.src = dataUrl;
-    });
-  }
-
-  fileToDataURL(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => resolve(e.target.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  }
-
   onParameterChange(paramName, value) {
-    // Real-time parameter updates
-    console.log(`Parameter ${paramName} changed to ${value}`);
-
-    if (!window.depthMapExplorer) {
-      return; // Application not ready yet
-    }
-
-    // Point size and max depth can be updated immediately without regenerating geometry
-    if (paramName === "pointSize") {
-      this.updatePointSize(value);
-    } else if (paramName === "maxDepth") {
-      // Try to update max depth in real-time
-      this.updateMaxDepth(value);
-    } else if (
-      paramName === "compWidth" ||
-      paramName === "compHeight" ||
-      paramName === "gridDensity"
-    ) {
-      // Width/height/grid density changes should use existing processed images (no AI re-processing)
-      this.throttledUpdateWithExistingImages();
-    } else {
-      // For other parameters, throttle updates to avoid too many regenerations
-      this.throttledUpdate();
-    }
-  }
-
-  throttledUpdate(customDelay = null) {
-    // Clear existing timeout
-    if (this.updateThrottleTimeout) {
-      clearTimeout(this.updateThrottleTimeout);
-    }
-
-    // Use custom delay or default throttle delay
-    const delay = customDelay !== null ? customDelay : this.THROTTLE_DELAY;
-
-    // Set new timeout for throttled update
-    this.updateThrottleTimeout = setTimeout(() => {
-      this.updateWithCurrentImages();
-    }, delay);
-  }
-
-  throttledUpdateWithExistingImages(customDelay = null) {
-    // Clear existing timeout
-    if (this.updateThrottleTimeout) {
-      clearTimeout(this.updateThrottleTimeout);
-    }
-
-    // Use custom delay or default throttle delay
-    const delay = customDelay !== null ? customDelay : this.THROTTLE_DELAY;
-
-    // Set new timeout for throttled update with existing images
-    this.updateThrottleTimeout = setTimeout(() => {
-      this.updateWithExistingImages();
-    }, delay);
-  }
-
-  updatePointSize(size) {
-    if (window.depthMapExplorer) {
-      window.depthMapExplorer.updatePointSize(size);
-    }
-  }
-
-  updateMaxDepth(maxDepth) {
-    if (window.depthMapExplorer) {
-      const success = window.depthMapExplorer.updateMaxDepth(maxDepth);
-      if (!success) {
-        // Fallback to regeneration if real-time update fails
-        console.log(
-          "Real-time maxDepth update failed, falling back to regeneration"
-        );
-        this.throttledUpdate(50);
-      }
-    }
-  }
-
-  async updateWithCurrentImages() {
-    // Only regenerate if we have both images loaded
-    if (!this.depthMapFile || !this.displayImageFile) {
-      return; // No images to work with
-    }
-
-    try {
-      this.setLoadingState("Updating...");
-
-      // Use depth detection to regenerate with current parameters
-      await window.depthMapExplorer.updateCompositionWithDepthDetection(
-        this.depthMapFile,
-        this.displayImageFile,
-        this.parameters,
-        // Callback to update depth map preview
-        (depthDataUrl) => {
-          this.updateDepthMapPreview(depthDataUrl);
-        }
-      );
-    } catch (error) {
-      console.error("Error updating composition live:", error);
-    } finally {
-      this.clearLoadingState();
-    }
-  }
-
-  async updateWithExistingImages() {
-    // Only update if we have processed images stored
-    if (!this.generatedDepthMap || !this.loadedDisplayImage) {
-      console.log(
-        "No processed images available, falling back to full regeneration"
-      );
-      return this.updateWithCurrentImages();
-    }
-
-    try {
-      this.setLoadingState("Updating layout...");
-
-      // Use existing processed images (no AI processing needed)
-      await window.depthMapExplorer.updateCompositionWithExistingDepthMap(
-        this.generatedDepthMap,
-        this.loadedDisplayImage,
-        this.parameters
-      );
-    } catch (error) {
-      console.error("Error updating with existing images:", error);
-      // Fallback to full regeneration if existing images fail
-      return this.updateWithCurrentImages();
-    } finally {
-      this.clearLoadingState();
+    // Notify sketch of parameter change if connected
+    if (this.sketch && this.sketch.onParameterChange) {
+      this.sketch.onParameterChange(paramName, value, this.parameters);
     }
   }
 
   saveImage() {
-    if (window.depthMapExplorer) {
-      window.depthMapExplorer.saveFrame();
-    }
-  }
-
-  // Method to get current parameters
-  getParameters() {
-    return { ...this.parameters };
-  }
-
-  // Method to update parameters programmatically
-  setParameter(name, value) {
-    if (this.controls[name]) {
-      this.parameters[name] = value;
-      this.controls[name].slider.value = value;
-      this.controls[name].input.value = value;
-    }
-  }
-
-  resetState() {
-    // Reset file state
-    this.depthMapFile = null;
-    this.displayImageFile = null;
-
-    // Clear stored processed images
-    this.generatedDepthMap = null;
-    this.loadedDisplayImage = null;
-
-    // Reset parameters to defaults from config
-    this.parameters = getDefaultParameters();
-
-    // Update all controls to default values
-    Object.keys(this.controls).forEach((name) => {
-      const control = this.controls[name];
-      const defaultValue = this.parameters[name];
-      if (control.slider) control.slider.value = defaultValue;
-      if (control.input) control.input.value = defaultValue;
-    });
-
-    // Clear previews
-    if (this.depthMapPreview) {
-      this.depthMapPreview.src = "";
-      this.depthMapPreview.style.display = "none";
-    }
-    if (this.displayImagePreview) {
-      this.displayImagePreview.src = "";
-      this.displayImagePreview.style.display = "none";
-    }
-
-    // Clear file inputs
-    if (this.depthMapInput) this.depthMapInput.value = "";
-    if (this.displayImageInput) this.displayImageInput.value = "";
-
-    // Disable generate button
-    this.checkGenerateReady();
-
-    // Clear any throttle timeouts
-    if (this.updateThrottleTimeout) {
-      clearTimeout(this.updateThrottleTimeout);
-      this.updateThrottleTimeout = null;
+    // Call sketch's save function if available
+    if (this.sketch && this.sketch.saveCanvas) {
+      this.sketch.saveCanvas();
+    } else {
+      console.warn("No save function available");
     }
   }
 
   openGui() {
     this.isGuiOpen = true;
-    this.guiPanel.classList.remove("hidden");
+    if (this.guiPanel) {
+      this.guiPanel.classList.remove("hidden");
+    }
     document.body.classList.remove("gui-hidden");
+    if (this.guiToggleBtn) {
+      this.guiToggleBtn.style.display = "none";
+    }
   }
 
   closeGui() {
     this.isGuiOpen = false;
-    this.guiPanel.classList.add("hidden");
+    if (this.guiPanel) {
+      this.guiPanel.classList.add("hidden");
+    }
     document.body.classList.add("gui-hidden");
+    if (this.guiToggleBtn) {
+      this.guiToggleBtn.style.display = "inline-block";
+    }
   }
 
-  toggleGuides(show) {
-    if (show) {
-      this.guidesElement.classList.remove("hidden");
-    } else {
-      this.guidesElement.classList.add("hidden");
+  // Update slider bounds dynamically (e.g., when image loads)
+  updateSliderBounds(paramKey, min, max) {
+    const control = this.controls[paramKey];
+    if (!control || !control.slider || !control.input) {
+      console.warn(`Cannot update bounds for ${paramKey}: control not found`);
+      return;
     }
+
+    // Update slider and input min/max attributes
+    control.slider.min = min;
+    control.slider.max = max;
+    control.input.min = min;
+    control.input.max = max;
+
+    // Check if movement is possible (min != max)
+    const canMove = Math.abs(max - min) > 0.01; // Use small epsilon for floating point comparison
+
+    if (canMove) {
+      // Enable the controls
+      control.slider.disabled = false;
+      control.input.disabled = false;
+      control.slider.style.opacity = "1";
+      control.input.style.opacity = "1";
+      control.slider.style.cursor = "pointer";
+    } else {
+      // Disable the controls when no movement is possible
+      control.slider.disabled = true;
+      control.input.disabled = true;
+      control.slider.style.opacity = "0.4";
+      control.input.style.opacity = "0.4";
+      control.slider.style.cursor = "not-allowed";
+    }
+
+    // Clamp current value to new bounds
+    const currentValue = this.parameters[paramKey];
+    const clampedValue = Math.max(min, Math.min(max, currentValue));
+
+    if (currentValue !== clampedValue) {
+      this.updateParameterValue(paramKey, clampedValue);
+    }
+
+    console.log(`Updated bounds for ${paramKey}: [${min}, ${max}], canMove: ${canMove}`);
+  }
+
+  // Update a parameter value programmatically
+  updateParameterValue(paramKey, value) {
+    const control = this.controls[paramKey];
+    if (!control || !control.slider || !control.input) {
+      console.warn(`Cannot update value for ${paramKey}: control not found`);
+      return;
+    }
+
+    this.parameters[paramKey] = value;
+    control.slider.value = value;
+    control.input.value = value;
+
+    // Notify sketch
+    this.onParameterChange(paramKey, value);
+  }
+
+  // Method to connect the sketch instance
+  connectSketch(sketch) {
+    this.sketch = sketch;
   }
 }
 
-// Clean up GUI state before page refresh
-window.addEventListener("beforeunload", () => {
-  if (window.guiController) {
-    window.guiController.resetState();
-  }
+// Create global GUI instance when DOM is ready
+let gui = null;
+
+// Initialize GUI after DOM and controls are ready
+function initGUI() {
+  console.log("Initializing GUI Controller...");
+  gui = new GUIController();
+  window.gui = gui; // Make available globally
+  console.log("GUI Controller initialized");
+  console.log("Available controls:", Object.keys(gui.controls));
+}
+
+// Wait for the gui-generator to dispatch the 'guiControlsGenerated' event
+window.addEventListener("guiControlsGenerated", () => {
+  console.log("GUI controls generated event received");
+  initGUI();
 });
 
-// Initialize GUI controller when DOM is loaded
-document.addEventListener("DOMContentLoaded", () => {
-  // Clean up any existing instance
-  if (window.guiController) {
-    window.guiController.resetState();
+// Fallback: if event was already dispatched or gui-generator loads in different order
+setTimeout(() => {
+  if (!gui) {
+    console.log("Initializing GUI via fallback timeout");
+    initGUI();
   }
-  window.guiController = new GUIController();
-});
+}, 500);
 
-export { GUIController };
+// Export proxy that ensures GUI is ready
+export default new Proxy(
+  {},
+  {
+    get(target, prop) {
+      if (prop === "connectSketch") {
+        return (sketch) => {
+          if (gui) {
+            gui.connectSketch(sketch);
+          } else {
+            // If GUI not ready yet, wait for it
+            const checkGui = setInterval(() => {
+              if (gui) {
+                gui.connectSketch(sketch);
+                clearInterval(checkGui);
+              }
+            }, 50);
+          }
+        };
+      }
+      // For any other property, try to access it from gui
+      if (gui && prop in gui) {
+        const value = gui[prop];
+        return typeof value === "function" ? value.bind(gui) : value;
+      }
+      return undefined;
+    },
+  }
+);

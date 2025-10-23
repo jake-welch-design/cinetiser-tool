@@ -1,164 +1,149 @@
-import { Utils } from "./utils.js";
+/**
+ * Image processing utilities for p5.js
+ * Handles loading, centering, and fitting images to canvas
+ */
 
 /**
- * Image processing and canvas operations
+ * Calculate dimensions to fit image to canvas while maintaining aspect ratio
+ * and filling the entire canvas (with cropping if necessary)
  */
-export class ImageProcessor {
-  constructor() {
-    this.depthMapCanvas = null;
-    this.imgCanvas = null;
-    this.depthMapData = null;
-    this.imgData = null;
+export function calculateCoverDimensions(imgWidth, imgHeight, canvasWidth, canvasHeight) {
+  const imgAspect = imgWidth / imgHeight;
+  const canvasAspect = canvasWidth / canvasHeight;
+
+  let drawWidth, drawHeight;
+
+  if (imgAspect > canvasAspect) {
+    // Image is wider than canvas - fit to height
+    drawHeight = canvasHeight;
+    drawWidth = drawHeight * imgAspect;
+  } else {
+    // Image is taller than canvas - fit to width
+    drawWidth = canvasWidth;
+    drawHeight = drawWidth / imgAspect;
   }
 
-  /**
-   * Process two images (depth map and display image) to fit the specified dimensions
-   */
-  processImages(depthMap, displayImg, layerWidth, layerHeight) {
-    console.log("Processing images:", {
-      depthMap: { width: depthMap.width, height: depthMap.height },
-      displayImg: { width: displayImg.width, height: displayImg.height },
-      layerWidth,
-      layerHeight,
-    });
+  return {
+    width: drawWidth,
+    height: drawHeight,
+    offsetX: (canvasWidth - drawWidth) / 2,
+    offsetY: (canvasHeight - drawHeight) / 2,
+  };
+}
 
-    // Create canvases for processing images
-    this.depthMapCanvas = document.createElement("canvas");
-    this.imgCanvas = document.createElement("canvas");
+/**
+ * Draw image to fill canvas, centered and cropped to maintain aspect ratio
+ * Use this in your p5.js draw() function
+ *
+ * @param {p5.Image} img - The p5.js image object
+ * @param {number} canvasWidth - Width of the canvas
+ * @param {number} canvasHeight - Height of the canvas
+ */
+/**
+ * Instance-mode aware: pass the p5 instance as first argument.
+ * Draw image to fill canvas, centered and cropped to maintain aspect ratio
+ * @param {number} offsetX - Additional X offset for positioning
+ * @param {number} offsetY - Additional Y offset for positioning
+ * @param {number} zoom - Zoom level (1.0 = normal, > 1.0 = zoom in, < 1.0 = zoom out)
+ */
+export function drawImageCover(p, img, canvasWidth, canvasHeight, offsetX = 0, offsetY = 0, zoom = 1.0) {
+  if (!img) return;
 
-    this.depthMapCanvas.width = layerWidth;
-    this.depthMapCanvas.height = layerHeight;
-    this.imgCanvas.width = layerWidth;
-    this.imgCanvas.height = layerHeight;
+  const dims = calculateCoverDimensions(img.width, img.height, canvasWidth, canvasHeight);
 
-    const depthMapCtx = this.depthMapCanvas.getContext("2d", {
-      colorSpace: "srgb",
-    });
-    const imgCtx = this.imgCanvas.getContext("2d", { colorSpace: "srgb" });
+  p.push();
+  p.imageMode(p.CENTER);
+  p.translate(canvasWidth / 2 + offsetX, canvasHeight / 2 + offsetY);
+  p.scale(zoom);
+  p.image(img, 0, 0, dims.width, dims.height);
+  p.pop();
+}
 
-    // Calculate aspect ratios and dimensions
-    const depthMapAspect = depthMap.width / depthMap.height;
-    const imgAspect = displayImg.width / displayImg.height;
-    const layerAspect = layerWidth / layerHeight;
+/**
+ * Calculate the minimum zoom level that keeps the image covering the entire canvas
+ * Returns the minimum zoom where no empty space is visible
+ */
+export function calculateMinZoom(imgWidth, imgHeight, canvasWidth, canvasHeight) {
+  // calculateCoverDimensions sizes the image at zoom 1.0 to exactly cover the canvas
+  // One dimension matches exactly, the other is larger
+  // If we zoom below 1.0, the image shrinks and won't cover the canvas anymore
+  // Therefore, the minimum zoom to maintain coverage is always 1.0
+  return 1.0;
+}
 
-    // Calculate fitted dimensions
-    const depthDims = Utils.calculateFitDimensions(
-      depthMapAspect,
-      layerAspect,
-      layerWidth,
-      layerHeight
-    );
-    const imgDims = Utils.calculateFitDimensions(
-      imgAspect,
-      layerAspect,
-      layerWidth,
-      layerHeight
-    );
+/**
+ * Calculate the min and max position offsets that keep the image within bounds
+ * Returns the range the image can be moved without showing empty space
+ * @param {number} zoom - Current zoom level to account for when calculating bounds
+ */
+export function calculatePositionBounds(imgWidth, imgHeight, canvasWidth, canvasHeight, zoom = 1.0) {
+  const dims = calculateCoverDimensions(imgWidth, imgHeight, canvasWidth, canvasHeight);
 
-    console.log("Calculated dimensions:", {
-      depth: depthDims,
-      img: imgDims,
-    });
+  // Apply zoom to dimensions
+  const zoomedWidth = dims.width * zoom;
+  const zoomedHeight = dims.height * zoom;
 
-    // Process depth map
-    this._drawImageToCanvas(
-      depthMapCtx,
-      depthMap,
-      depthDims,
-      layerWidth,
-      layerHeight
-    );
+  // Calculate how much extra space the image has beyond the canvas
+  const excessWidth = zoomedWidth - canvasWidth;
+  const excessHeight = zoomedHeight - canvasHeight;
 
-    // Process display image
-    this._drawImageToCanvas(
-      imgCtx,
-      displayImg,
-      imgDims,
-      layerWidth,
-      layerHeight
-    );
+  // The image can move half the excess in each direction
+  return {
+    minX: -excessWidth / 2,
+    maxX: excessWidth / 2,
+    minY: -excessHeight / 2,
+    maxY: excessHeight / 2,
+  };
+}
 
-    // Extract image data for pixel sampling
-    try {
-      this.depthMapData = depthMapCtx.getImageData(
-        0,
-        0,
-        layerWidth,
-        layerHeight
-      );
-      this.imgData = imgCtx.getImageData(0, 0, layerWidth, layerHeight);
-      console.log("Image data extracted successfully");
-    } catch (error) {
-      console.error("Error extracting image data:", error);
-      throw error;
-    }
+/**
+ * Calculate dimensions to fit image within canvas while maintaining aspect ratio
+ * (with letterboxing if necessary)
+ */
+export function calculateContainDimensions(imgWidth, imgHeight, canvasWidth, canvasHeight) {
+  const imgAspect = imgWidth / imgHeight;
+  const canvasAspect = canvasWidth / canvasHeight;
+
+  let drawWidth, drawHeight;
+
+  if (imgAspect > canvasAspect) {
+    // Image is wider - fit to width
+    drawWidth = canvasWidth;
+    drawHeight = drawWidth / imgAspect;
+  } else {
+    // Image is taller - fit to height
+    drawHeight = canvasHeight;
+    drawWidth = drawHeight * imgAspect;
   }
 
-  /**
-   * Draw image to canvas with centering and cropping
-   */
-  _drawImageToCanvas(ctx, image, dimensions, canvasWidth, canvasHeight) {
-    // Clear with black background
-    ctx.fillStyle = "#000000";
-    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+  return {
+    width: drawWidth,
+    height: drawHeight,
+    offsetX: (canvasWidth - drawWidth) / 2,
+    offsetY: (canvasHeight - drawHeight) / 2,
+  };
+}
 
-    // Translate to center
-    ctx.save();
-    ctx.translate(canvasWidth / 2, canvasHeight / 2);
+/**
+ * Draw image to fit within canvas, centered with letterboxing if needed
+ * Use this in your p5.js draw() function
+ *
+ * @param {p5.Image} img - The p5.js image object
+ * @param {number} canvasWidth - Width of the canvas
+ * @param {number} canvasHeight - Height of the canvas
+ */
+/**
+ * Instance-mode aware: pass the p5 instance as first argument.
+ * Draw image to fit within canvas, centered with letterboxing if needed
+ */
+export function drawImageContain(p, img, canvasWidth, canvasHeight) {
+  if (!img) return;
 
-    // Calculate source cropping if image is larger than canvas
-    const sourceX =
-      dimensions.width > canvasWidth ? (dimensions.width - canvasWidth) / 2 : 0;
-    const sourceY =
-      dimensions.height > canvasHeight
-        ? (dimensions.height - canvasHeight) / 2
-        : 0;
-    const sourceW = Math.min(dimensions.width, canvasWidth);
-    const sourceH = Math.min(dimensions.height, canvasHeight);
+  const dims = calculateContainDimensions(img.width, img.height, canvasWidth, canvasHeight);
 
-    // Calculate destination position (always centered)
-    const destX = -sourceW / 2;
-    const destY = -sourceH / 2;
-
-    ctx.drawImage(
-      image,
-      sourceX * (image.width / dimensions.width),
-      sourceY * (image.height / dimensions.height),
-      sourceW * (image.width / dimensions.width),
-      sourceH * (image.height / dimensions.height),
-      destX,
-      destY,
-      sourceW,
-      sourceH
-    );
-
-    ctx.restore();
-  }
-
-  /**
-   * Get pixel data at specific coordinates
-   */
-  getPixel(imageData, x, y) {
-    return Utils.getPixel(imageData, x, y);
-  }
-
-  /**
-   * Get the processed image data
-   */
-  getImageData() {
-    return {
-      depthMapData: this.depthMapData,
-      imgData: this.imgData,
-    };
-  }
-
-  /**
-   * Clean up resources
-   */
-  cleanup() {
-    this.depthMapCanvas = null;
-    this.imgCanvas = null;
-    this.depthMapData = null;
-    this.imgData = null;
-  }
+  p.push();
+  p.imageMode(p.CENTER);
+  p.translate(canvasWidth / 2, canvasHeight / 2);
+  p.image(img, 0, 0, dims.width, dims.height);
+  p.pop();
 }

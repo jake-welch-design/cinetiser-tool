@@ -4,33 +4,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Depth Collage Generator</title>
+    <title>Image Tool Template</title>
     <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
 </head>
 
 <body>
     <a href="https://jakewelch.design" target="_blank" id="websiteLink">jakewelch.design</a>
-    <h1 id="main-title">Depth Collage Generator</h1>
-    <div id="loading">Upload images and click 'Generate' to begin</div>
+    <h1 id="main-title">Image Tool Template</h1>
 
-    <!-- On-screen guides (initially hidden) -->
-    <div id="guides" class="guides hidden">
-        <!-- 3x3 Grid -->
-        <div class="grid-overlay">
-            <div class="grid-line grid-vertical-1"></div>
-            <div class="grid-line grid-vertical-2"></div>
-            <div class="grid-line grid-horizontal-1"></div>
-            <div class="grid-line grid-horizontal-2"></div>
-        </div>
+    <!-- Canvas container -->
+    <div id="canvas-container"></div>
 
-        <!-- Crosshair -->
-        <div class="crosshair">
-            <div class="crosshair-horizontal"></div>
-            <div class="crosshair-vertical"></div>
-        </div>
-    </div>
-
-    <!-- GUI Toggle Button (stays visible when GUI is closed) -->
+    <!-- GUI Toggle Button -->
     <button id="gui-toggle" class="gui-toggle-btn">Open Settings</button>
 
     <!-- Sidebar GUI Panel -->
@@ -40,54 +26,50 @@
 
         <div class="gui-content">
 
-            <div class="gui-section">
+            <!-- <div class="gui-section">
                 <p style="font-size: 0.9em; margin-top: -5px; margin-bottom: -5px; color: #cacaca;">
-                    Upload images and click 'Generate' to begin. Use sliders to adjust the parameters, scroll to
-                    zoom, and drag to pan view. Click 'Save' to export an image.
+                    Upload an image and adjust parameters below. Click 'Save' to export.
                 </p>
+            </div> -->
+
+            <!-- Image Upload Section -->
+            <div class="gui-section">
+                <h3 class="gui-section-header">Upload Image</h3>
+                <input type="file" id="imageInput" accept="image/*">
             </div>
 
-
-            <div class="gui-section">
-                <label for="depthMapInput">Source image for depth map:</label>
-                <input type="file" id="depthMapInput" accept="image/*">
-
-                <label for="displayImageInput">Color image:</label>
-                <input type="file" id="displayImageInput" accept="image/*">
-
-                <div class="preview-container">
-                    <div class="preview-item">
-                        <img id="depthMapPreview" class="preview-image" style="display: none;">
-                    </div>
-                    <div class="preview-item">
-                        <img id="displayImagePreview" class="preview-image" style="display: none;">
-                    </div>
-                </div>
-            </div>
-
-            <div class="gui-section">
+            <!-- Parameter Controls Section -->
+            <div class="gui-section" id="controls-section">
                 <!-- Controls will be dynamically generated from config -->
             </div>
 
+            <!-- Action Buttons -->
             <div class="gui-section">
-                <button id="generateBtn">Generate</button>
                 <button id="saveBtn">Save</button>
             </div>
         </div>
     </div>
 
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.155.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.155.0/examples/jsm/",
-                "@huggingface/transformers": "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.3/dist/transformers.min.js"
-            }
-        }
+    <!-- p5.js library -->
+
+    <!-- Load modules after p5.js is ready -->
+    <script type="module">
+        // Clear file inputs on page load to prevent caching
+        window.addEventListener('load', () => {
+            const fileInputs = document.querySelectorAll('input[type="file"]');
+            fileInputs.forEach(input => {
+                input.value = '';
+            });
+        });
+
+        // Wait for p5.js to be fully loaded
+        window.addEventListener('load', async () => {
+            // Import modules - gui-generator first, then gui.js will listen for the event
+            await import('./gui-generator.js');
+            await import('./gui.js');
+            await import('./sketch.js');
+        });
     </script>
-    <script type="module" src="gui-generator.js?v=2"></script>
-    <script type="module" src="gui.js?v=2"></script>
-    <script type="module" src="sketch.js?v=2"></script>
 </body>
 
 </html>
