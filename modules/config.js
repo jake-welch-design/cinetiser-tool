@@ -52,6 +52,54 @@ export const GUI_CONFIG = {
     label: "Zoom",
     section: "image",
   },
+
+  // Cinetisation: diameter (thickness) of each slice/ring
+  sliceSize: {
+    default: 50,
+    min: 1,
+    max: 100,
+    step: 1,
+    label: "Slice size",
+    section: "cinetisation",
+  },
+
+  // Cinetisation: number of slices/rings (min 1)
+  sliceAmount: {
+    default: 5,
+    min: 1,
+    max: 30,
+    step: 1,
+    label: "Slice amount",
+    section: "cinetisation",
+  },
+
+  // Rotation amount (degrees)
+  rotationAmount: {
+    default: 10,
+    min: -45,
+    max: 45,
+    step: 1,
+    label: "Rotation amount",
+    section: "cinetisation",
+  },
+
+  // Rotation speed
+  rotationSpeed: {
+    default: 0.004,
+    min: 0,
+    max: 0.05,
+    step: 0.001,
+    label: "Speed",
+    section: "cinetisation",
+  },
+
+  // Animated toggle: true = animated, false = static
+  animated: {
+    default: false,
+    type: "boolean",
+    label: "Animated",
+    section: "cinetisation",
+  },
 };
 
 // Define sections and their display properties
@@ -63,6 +111,10 @@ export const GUI_SECTIONS = {
   image: {
     title: "Image",
     order: 2,
+  },
+  cinetisation: {
+    title: "Cinetisation",
+    order: 3,
   },
 };
 

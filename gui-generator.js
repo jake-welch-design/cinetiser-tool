@@ -1,4 +1,8 @@
-import { GUI_CONFIG, GUI_SECTIONS, getCanvasPresets } from "./modules/config.js";
+import {
+  GUI_CONFIG,
+  GUI_SECTIONS,
+  getCanvasPresets,
+} from "./modules/config.js";
 
 /**
  * Dynamically generate GUI controls from configuration
@@ -51,7 +55,9 @@ function generateGUIControls() {
   });
 
   // Sort sections by order
-  const sortedSections = Object.entries(GUI_SECTIONS).sort(([, a], [, b]) => a.order - b.order);
+  const sortedSections = Object.entries(GUI_SECTIONS).sort(
+    ([, a], [, b]) => a.order - b.order
+  );
 
   // Generate sections
   sortedSections.forEach(([sectionKey, sectionConfig]) => {
@@ -74,26 +80,44 @@ function generateGUIControls() {
       const containerDiv = document.createElement("div");
       containerDiv.className = "range-container";
 
-      containerDiv.innerHTML = `
-        <label>${config.label}:</label>
-        <div>
-          <input type="range" 
-                 id="${key}" 
-                 min="${config.min}" 
-                 max="${config.max}" 
-                 step="${config.step}" 
-                 value="${config.default}">
-          <input type="number" 
-                 id="${key}Value" 
-                 min="${config.min}" 
-                 max="${config.max}" 
-                 step="${config.step}" 
-                 value="${config.default}">
-        </div>
-      `;
+      // If the config defines a boolean type, render a checkbox instead
+      if (config.type === "boolean") {
+        // render a switch-style checkbox. Add CSS for .switch and .switch-slider in stylesheet to style it
+        containerDiv.innerHTML = `
+          <label>${config.label}:</label>
+          <div>
+            <label class="switch">
+              <input type="checkbox" id="${key}" ${
+          config.default ? "checked" : ""
+        } />
+              <span class="switch-slider"></span>
+            </label>
+          </div>
+        `;
+      } else {
+        containerDiv.innerHTML = `
+          <label>${config.label}:</label>
+          <div>
+            <input type="range" 
+                   id="${key}" 
+                   min="${config.min}" 
+                   max="${config.max}" 
+                   step="${config.step}" 
+                   value="${config.default}">
+            <input type="number" 
+                   id="${key}Value" 
+                   min="${config.min}" 
+                   max="${config.max}" 
+                   step="${config.step}" 
+                   value="${config.default}">
+          </div>
+        `;
+      }
 
       guiSection.appendChild(containerDiv);
-      console.log(`Created control for: ${key} (${config.label}) in section: ${sectionKey}`);
+      console.log(
+        `Created control for: ${key} (${config.label}) in section: ${sectionKey}`
+      );
     });
   });
 

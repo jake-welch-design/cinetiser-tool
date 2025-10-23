@@ -1,4 +1,8 @@
-import { getDefaultParameters, GUI_CONFIG, clampParameter } from "./modules/config.js";
+import {
+  getDefaultParameters,
+  GUI_CONFIG,
+  clampParameter,
+} from "./modules/config.js";
 
 /**
  * GUI Controller - handles all GUI interactions
@@ -26,11 +30,16 @@ class GUIController {
 
     // Parameter controls - dynamically created from config.js
     this.controls = {};
-    console.log("Looking for controls from GUI_CONFIG:", Object.keys(GUI_CONFIG));
+    console.log(
+      "Looking for controls from GUI_CONFIG:",
+      Object.keys(GUI_CONFIG)
+    );
 
     Object.keys(GUI_CONFIG).forEach((paramKey) => {
       const slider = document.getElementById(paramKey);
       const input = document.getElementById(paramKey + "Value");
+
+      const config = GUI_CONFIG[paramKey] || {};
 
       console.log(`Searching for ${paramKey}:`, {
         sliderFound: !!slider,
@@ -39,9 +48,38 @@ class GUIController {
         inputElement: input,
       });
 
-      if (slider && input) {
-        this.controls[paramKey] = { slider, input };
-        console.log(`✓ Control registered for: ${paramKey}`);
+      if (slider) {
+        if (config.type === "boolean") {
+          // checkbox/switch
+          this.controls[paramKey] = { slider };
+          console.log(`✓ Checkbox control registered for: ${paramKey}`);
+        } else {
+          // Ensure numeric input exists; if not, create one and append next to slider
+          let numericInput = input;
+          if (!numericInput) {
+            numericInput = document.createElement("input");
+            numericInput.type = "number";
+            numericInput.id = paramKey + "Value";
+            if (typeof config.min !== "undefined")
+              numericInput.min = config.min;
+            if (typeof config.max !== "undefined")
+              numericInput.max = config.max;
+            if (typeof config.step !== "undefined")
+              numericInput.step = config.step;
+            numericInput.value = config.default;
+            // try to append the numeric input next to the slider if DOM structure allows
+            try {
+              const parent = slider.parentElement;
+              if (parent) parent.appendChild(numericInput);
+              else document.body.appendChild(numericInput);
+            } catch (e) {
+              document.body.appendChild(numericInput);
+            }
+            console.log(`ℹ️ Created numeric input for ${paramKey}`);
+          }
+          this.controls[paramKey] = { slider, input: numericInput };
+          console.log(`✓ Control registered for: ${paramKey}`);
+        }
       } else {
         console.warn(`✗ Control not found for parameter: ${paramKey}`);
       }
@@ -69,29 +107,44 @@ class GUIController {
   setupEventListeners() {
     // File input handler
     if (this.imageInput) {
-      this.imageInput.addEventListener("change", (e) => this.handleImageUpload(e));
+      this.imageInput.addEventListener("change", (e) =>
+        this.handleImageUpload(e)
+      );
     }
 
     // Parameter control handlers
     Object.keys(this.controls).forEach((param) => {
       const control = this.controls[param];
 
-      if (!control.slider || !control.input) return;
+      // If this control has both slider and numeric input (normal range control)
+      if (control.slider && control.input) {
+        // Sync slider and number input with validation
+        control.slider.addEventListener("input", (e) => {
+          const value = clampParameter(param, e.target.value);
+          this.parameters[param] = value;
+          control.input.value = value;
+          this.onParameterChange(param, value);
+        });
 
-      // Sync slider and number input with validation
-      control.slider.addEventListener("input", (e) => {
-        const value = clampParameter(param, e.target.value);
-        this.parameters[param] = value;
-        control.input.value = value;
-        this.onParameterChange(param, value);
-      });
+        control.input.addEventListener("input", (e) => {
+          const value = clampParameter(param, e.target.value);
+          this.parameters[param] = value;
+          control.slider.value = value;
+          this.onParameterChange(param, value);
+        });
+      } else if (control.slider && !control.input) {
+        // checkbox / boolean control
+        control.slider.addEventListener("change", (e) => {
+          const checked = e.target.checked;
+          this.parameters[param] = checked;
+          this.onParameterChange(param, checked);
 
-      control.input.addEventListener("input", (e) => {
-        const value = clampParameter(param, e.target.value);
-        this.parameters[param] = value;
-        control.slider.value = value;
-        this.onParameterChange(param, value);
-      });
+          // If this is the animated toggle, enable/disable rotationSpeed control
+          if (param === "animated") {
+            this.toggleRotationSpeed(checked);
+          }
+        });
+      }
     });
 
     // Canvas preset buttons
@@ -203,14 +256,39 @@ class GUIController {
   // Update slider bounds dynamically (e.g., when image loads)
   updateSliderBounds(paramKey, min, max) {
     const control = this.controls[paramKey];
-    if (!control || !control.slider || !control.input) {
+    if (!control || !control.slider) {
       console.warn(`Cannot update bounds for ${paramKey}: control not found`);
       return;
     }
 
-    // Update slider and input min/max attributes
+    // Update slider min/max
     control.slider.min = min;
     control.slider.max = max;
+
+    // If numeric input exists, update it; otherwise create one so UI stays consistent
+    if (!control.input) {
+      const config = GUI_CONFIG[paramKey] || {};
+      const numericInput = document.createElement("input");
+      numericInput.type = "number";
+      numericInput.id = paramKey + "Value";
+      if (typeof config.min !== "undefined") numericInput.min = config.min;
+      if (typeof config.max !== "undefined") numericInput.max = config.max;
+      if (typeof config.step !== "undefined") numericInput.step = config.step;
+      numericInput.value = this.parameters[paramKey] ?? config.default ?? 0;
+      // insert after slider if possible
+      try {
+        const parent = control.slider.parentElement;
+        if (parent) parent.appendChild(numericInput);
+        else document.body.appendChild(numericInput);
+      } catch (e) {
+        document.body.appendChild(numericInput);
+      }
+      control.input = numericInput;
+      console.log(
+        `ℹ️ Created missing numeric input for ${paramKey} in updateSliderBounds`
+      );
+    }
+
     control.input.min = min;
     control.input.max = max;
 
@@ -218,14 +296,12 @@ class GUIController {
     const canMove = Math.abs(max - min) > 0.01; // Use small epsilon for floating point comparison
 
     if (canMove) {
-      // Enable the controls
       control.slider.disabled = false;
       control.input.disabled = false;
       control.slider.style.opacity = "1";
       control.input.style.opacity = "1";
       control.slider.style.cursor = "pointer";
     } else {
-      // Disable the controls when no movement is possible
       control.slider.disabled = true;
       control.input.disabled = true;
       control.slider.style.opacity = "0.4";
@@ -241,23 +317,51 @@ class GUIController {
       this.updateParameterValue(paramKey, clampedValue);
     }
 
-    console.log(`Updated bounds for ${paramKey}: [${min}, ${max}], canMove: ${canMove}`);
+    console.log(
+      `Updated bounds for ${paramKey}: [${min}, ${max}], canMove: ${canMove}`
+    );
   }
 
   // Update a parameter value programmatically
   updateParameterValue(paramKey, value) {
     const control = this.controls[paramKey];
-    if (!control || !control.slider || !control.input) {
+    if (!control || !control.slider) {
       console.warn(`Cannot update value for ${paramKey}: control not found`);
       return;
     }
 
     this.parameters[paramKey] = value;
-    control.slider.value = value;
-    control.input.value = value;
+    // If numeric control with input
+    if (control.input) {
+      control.slider.value = value;
+      control.input.value = value;
+    } else {
+      // boolean checkbox
+      control.slider.checked = !!value;
+    }
 
     // Notify sketch
     this.onParameterChange(paramKey, value);
+  }
+
+  // Enable/disable (gray out) the rotationSpeed control based on animated toggle
+  toggleRotationSpeed(enabled) {
+    const control = this.controls["rotationSpeed"];
+    if (!control || !control.slider) return;
+
+    if (control.input) {
+      if (enabled) {
+        control.slider.disabled = false;
+        control.input.disabled = false;
+        control.slider.style.opacity = "1";
+        control.input.style.opacity = "1";
+      } else {
+        control.slider.disabled = true;
+        control.input.disabled = true;
+        control.slider.style.opacity = "0.4";
+        control.input.style.opacity = "0.4";
+      }
+    }
   }
 
   // Method to connect the sketch instance
@@ -276,6 +380,15 @@ function initGUI() {
   window.gui = gui; // Make available globally
   console.log("GUI Controller initialized");
   console.log("Available controls:", Object.keys(gui.controls));
+  // Ensure rotationSpeed control state reflects the default animated parameter
+  try {
+    const defaults = getDefaultParameters();
+    if (defaults && typeof defaults.animated !== "undefined") {
+      gui.toggleRotationSpeed(!!defaults.animated);
+    }
+  } catch (e) {
+    console.warn("Could not initialize animated toggle state:", e);
+  }
 }
 
 // Wait for the gui-generator to dispatch the 'guiControlsGenerated' event
