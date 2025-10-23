@@ -5,7 +5,7 @@
 export const GUI_CONFIG = {
   // Canvas width
   canvasWidth: {
-    default: 700,
+    default: 400,
     min: 200,
     max: 1920,
     step: 10,
@@ -15,7 +15,7 @@ export const GUI_CONFIG = {
 
   // Canvas height
   canvasHeight: {
-    default: 600,
+    default: 500,
     min: 200,
     max: 1920,
     step: 10,
