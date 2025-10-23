@@ -14,18 +14,19 @@ html {
 body {
     margin: 0;
     padding: 0;
-    background-color: #1b1b1b;
+    background-color: #111111;
     font-family: 'Satoshi', Arial, sans-serif;
     overflow: hidden;
-    color: #e0e0e0;
-    padding-left: 0;
+    /* color: #111111; */
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
 }
 
 canvas {
     display: block;
-    /* CANVAS MARGINS FROM WINDOW EDGES */
-    max-width: calc(100vw - 350px);
-    max-height: calc(100vh - 98px);
+    max-width: calc(100% - 200px);
+    max-height: calc(100% - 200px);
     width: auto !important;
     height: auto !important;
     object-fit: contain;
@@ -56,20 +57,46 @@ canvas {
     font-weight: normal;
     color: #ffffff;
     margin: 0;
-    /* z-index: 0; */
-    /* Make header opaque and match the body background so GUI scrolls visibly behind it */
-    /* padding: 6px 10px; */
+    z-index: 1100;
+}
+
+/* Main layout container */
+#main-container {
+    display: flex;
+    flex: 1;
+    width: 100%;
+    height: calc(100vh - 60px);
+    gap: 0;
+}
+
+/* GUI section - left side, hides when closed */
+#gui-section {
+    width: 380px;
+    flex-shrink: 0;
+    transition: margin-left 0.3s ease, width 0.3s ease;
+    overflow: hidden;
+}
+
+#gui-section.hidden {
+    width: 0;
+    margin-left: -380px;
+}
+
+/* Canvas section - right side, expands to fill space */
+#canvas-section {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
 }
 
 #canvas-container {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 100vw;
-    height: 100vh;
-    position: fixed;
-    top: 0;
-    left: 0;
+    width: 100%;
+    height: 100%;
     padding: 10px;
     box-sizing: border-box;
 }
@@ -80,9 +107,9 @@ canvas {
 
 .gui-toggle-btn {
     position: fixed;
-    top: 50px;
+    top: 45px;
     left: 20px;
-    z-index: 1001;
+    z-index: 2000;
     background: rgba(255, 255, 255, 0.1);
     backdrop-filter: blur(20px);
     border: 1px solid rgba(255, 255, 255, 0.15);
@@ -91,26 +118,28 @@ canvas {
     cursor: pointer;
     font-size: 12px;
     font-weight: normal;
-    transition: all 0.3s ease;
+    transition: opacity 0.3s ease;
     border-radius: 3px;
     margin: 0;
     width: auto;
     display: inline-block;
+    opacity: 1;
+    pointer-events: auto;
 }
 
 .gui-toggle-btn:hover {
     background: rgba(255, 255, 255, 0.2);
-    /* transform: translateY(-1px); */
 }
 
-body:not(.gui-hidden) .gui-toggle-btn {
+.gui-toggle-btn.hidden {
     opacity: 0;
     pointer-events: none;
 }
 
 .gui-close-btn {
     position: absolute;
-    right: 0;
+    right: 10px;
+    top: 0;
     background: none;
     border: none;
     color: #ffffff;
@@ -132,24 +161,12 @@ body:not(.gui-hidden) .gui-toggle-btn {
 }
 
 #gui-panel {
-    position: fixed;
-    top: 0;
-    left: 0;
-    height: 100vh;
-    width: 380px;
-    /* background: rgba(15, 15, 15, 0.5); */
-    /* backdrop-filter: blur(25px); */
-    /* border-right: 1px solid rgba(255, 255, 255, 0.15); */
+    position: relative;
+    height: 100%;
+    width: 100%;
     color: #f0f0f0;
     font-size: 12px;
-    z-index: 1000;
     overflow-y: auto;
-    transform: translateX(0);
-    transition: transform 0.3s ease;
-}
-
-#gui-panel.hidden {
-    transform: translateX(-100%);
 }
 
 .gui-content {

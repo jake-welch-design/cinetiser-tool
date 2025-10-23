@@ -95,8 +95,12 @@ function generateGUIControls() {
           </div>
         `;
       } else {
-        // Only show number input for canvas width and height
-        const showNumberInput = key === "canvasWidth" || key === "canvasHeight";
+        // Show number input for canvas dimensions, rotation amount, and slice amount
+        const showNumberInput =
+          key === "canvasWidth" ||
+          key === "canvasHeight" ||
+          key === "rotationAmount" ||
+          key === "sliceAmount";
         const numberInputHtml = showNumberInput
           ? `<input type="number" 
                    id="${key}Value" 

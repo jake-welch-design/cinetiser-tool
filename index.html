@@ -13,42 +13,45 @@
     <header> <a href="https://jakewelch.design" target="_blank" id="websiteLink">jakewelch.design</a>
         <h1 id="main-title">Cinetiser Tool</h1>
     </header>
-    <!-- Canvas container -->
-    <div id="canvas-container"></div>
 
-    <!-- GUI Toggle Button -->
-    <button id="gui-toggle" class="gui-toggle-btn">Open Settings</button>
 
-    <!-- Sidebar GUI Panel -->
-    <div id="gui-panel">
-        <!-- Close button (X) in top-right of GUI -->
-        <button id="gui-close" class="gui-close-btn">×</button>
+    <!-- Main layout container with two flex sections -->
+    <div id="main-container">
+        <!-- GUI Section (Left) -->
+        <div id="gui-section" class="main-section">
+            <!-- Sidebar GUI Panel -->
+            <div id="gui-panel">
+                <!-- Close button (X) in top-right of GUI -->
+                <button id="gui-close" class="gui-close-btn">×</button>
 
-        <div class="gui-content">
+                <div class="gui-content">
+                    <!-- Image Upload Section -->
+                    <div class="gui-section">
+                        <h3 class="gui-section-header">Upload Image</h3>
+                        <input type="file" id="imageInput" accept="image/*">
+                    </div>
 
-            <!-- <div class="gui-section">
-                <p style="font-size: 0.9em; margin-top: -5px; margin-bottom: -5px; color: #cacaca;">
-                    Upload an image and adjust parameters below. Click 'Save' to export.
-                </p>
-            </div> -->
+                    <!-- Parameter Controls Section -->
+                    <div class="gui-section" id="controls-section">
+                        <!-- Controls will be dynamically generated from config -->
+                    </div>
 
-            <!-- Image Upload Section -->
-            <div class="gui-section">
-                <h3 class="gui-section-header">Upload Image</h3>
-                <input type="file" id="imageInput" accept="image/*">
-            </div>
-
-            <!-- Parameter Controls Section -->
-            <div class="gui-section" id="controls-section">
-                <!-- Controls will be dynamically generated from config -->
-            </div>
-
-            <!-- Action Buttons -->
-            <div class="gui-section">
-                <button id="saveBtn">Save</button>
+                    <!-- Action Buttons -->
+                    <div class="gui-section">
+                        <button id="saveBtn">Save</button>
+                    </div>
+                </div>
             </div>
         </div>
+
+        <!-- Canvas Section (Right) -->
+        <div id="canvas-section" class="main-section">
+            <div id="canvas-container"></div>
+        </div>
     </div>
+
+    <!-- GUI Toggle Button (after gui-section so sibling selector works) -->
+    <button id="gui-toggle" class="gui-toggle-btn">Open Settings</button>
 
     <!-- p5.js library -->
 

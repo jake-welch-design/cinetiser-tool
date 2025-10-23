@@ -389,9 +389,10 @@ export default function sketch(p) {
           }
         }
 
-        // Only render slices if rotation amount is greater than 0
+        // Only render slices if rotation amount is not 0
         // When rotation amount is 0, no cinetisation effect is visible
-        if (rotationAmount > 0) {
+        // Supports both positive and negative rotation values
+        if (rotationAmount !== 0) {
           for (let i = 0; i < sliceAmount; i++) {
             // Each ring gets progressively smaller from the outer edge
             const currentSize = maxDiameter - i * ringThickness;
@@ -728,6 +729,26 @@ export default function sketch(p) {
     p.loadImage(imageDataUrl, (img) => {
       loadedImage = img;
       console.log("Image loaded:", img.width, "x", img.height);
+
+      // Clear all caches when a new image loads
+      patternImg = null;
+      lastPatternPosX = null;
+      lastPatternPosY = null;
+      lastPatternZoom = null;
+
+      // Clear display layer cache
+      display.clear();
+      lastCutSize = null;
+      lastSliceAmount = null;
+      lastRotationAmount = null;
+      lastDisplayPosX = null;
+      lastDisplayPosY = null;
+      lastDisplayZoom = null;
+
+      // Clear slice placement with new image
+      sliceCenterX = null;
+      sliceCenterY = null;
+      rotationTransitionStart = null;
 
       // Update zoom and position slider bounds based on image dimensions
       updateZoomSliderBounds();

@@ -223,10 +223,13 @@ class GUIController {
 
   openGui() {
     this.isGuiOpen = true;
+    const guiSection = document.getElementById("gui-section");
+    if (guiSection) {
+      guiSection.classList.remove("hidden");
+    }
     if (this.guiPanel) {
       this.guiPanel.classList.remove("hidden");
     }
-    document.body.classList.remove("gui-hidden");
     if (this.guiToggleBtn) {
       this.guiToggleBtn.style.display = "none";
     }
@@ -234,10 +237,13 @@ class GUIController {
 
   closeGui() {
     this.isGuiOpen = false;
+    const guiSection = document.getElementById("gui-section");
+    if (guiSection) {
+      guiSection.classList.add("hidden");
+    }
     if (this.guiPanel) {
       this.guiPanel.classList.add("hidden");
     }
-    document.body.classList.add("gui-hidden");
     if (this.guiToggleBtn) {
       this.guiToggleBtn.style.display = "inline-block";
     }
