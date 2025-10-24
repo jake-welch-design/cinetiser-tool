@@ -83,24 +83,6 @@ export const GUI_CONFIG = {
     section: "cinetisation",
   },
 
-  // Rotation speed
-  rotationSpeed: {
-    default: 0.004,
-    min: 0,
-    max: 0.05,
-    step: 0.001,
-    label: "Speed",
-    section: "cinetisation",
-  },
-
-  // Animated toggle: true = animated, false = static
-  animated: {
-    default: false,
-    type: "boolean",
-    label: "Animated",
-    section: "cinetisation",
-  },
-
   // Rotation method: "incremental" or "wave"
   rotationMethod: {
     default: "incremental",
@@ -110,6 +92,16 @@ export const GUI_CONFIG = {
       { value: "wave", label: "Ripple" },
     ],
     label: "Rotation method",
+    section: "cinetisation",
+  },
+
+  // Rotation speed
+  rotationSpeed: {
+    default: 0.004,
+    min: 0,
+    max: 0.05,
+    step: 0.001,
+    label: "Speed",
     section: "cinetisation",
   },
 };
@@ -125,7 +117,7 @@ export const GUI_SECTIONS = {
     order: 2,
   },
   cinetisation: {
-    title: "Cinetisation",
+    title: "Cinetisations",
     order: 3,
   },
 };

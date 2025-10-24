@@ -24,8 +24,14 @@ export default function sketch(p) {
   let showCursorPreview = false;
   let cursorX = 0;
   let cursorY = 0;
-  let sliceCenterX = null; // null means center, or explicit click position
-  let sliceCenterY = null;
+
+  // Multiple cuts support - now using cut slots (0-5) instead of arbitrary array
+  let cutSlots = [null, null, null, null, null, null]; // 6 slots, each can hold one cut or null
+  let selectedCutSlot = 0; // Currently selected slot (0-5), defaults to slot 0 (Cut 1)
+
+  // For backwards compatibility during transition
+  let cuts = []; // Will maintain this as a view of active cutSlots
+  let activeCutIndex = null; // Index of currently selected cut (null means no cut selected)
 
   // Rotation transition state
   let rotationTransitionStart = null; // timestamp when rotation starts
@@ -77,6 +83,11 @@ export default function sketch(p) {
       onParameterChange: handleParameterChange,
       saveCanvas: handleSave,
       resetImage: handleReset,
+      removeActiveCut: removeActiveCut,
+      getCutsInfo: getCutsInfo,
+      hasActiveCut: hasActiveCut,
+      getCutIndices: getCutIndices,
+      selectCutSlot: selectCutSlot,
     });
 
     // Listen for window resize to keep canvas fitted
@@ -99,7 +110,7 @@ export default function sketch(p) {
       // If animation is off and slices are placed, we only need to render on first frame
       const isAnimatedMode =
         params.animated !== undefined ? params.animated : true;
-      const hasSlices = sliceCenterX !== null && sliceCenterY !== null;
+      const hasSlices = cuts.length > 0;
 
       // Check if ring parameters have changed
       const ringParametersChanged =
@@ -192,7 +203,9 @@ export default function sketch(p) {
           const imageTop = imageCenterY - zoomedImageHeight / 2;
           const imageBottom = imageCenterY + zoomedImageHeight / 2;
 
-          let previewCutSize = Math.max(1, params.cutSize || 300);
+          // Use the selected cut slot's parameters for preview
+          const previewCutParams = gui.getParametersForSlot(selectedCutSlot);
+          let previewCutSize = Math.max(1, previewCutParams.cutSize || 300);
           const maxAllowedDiameter = Math.min(
             zoomedImageWidth,
             zoomedImageHeight
@@ -202,8 +215,11 @@ export default function sketch(p) {
           }
 
           // Reduce preview size by one ring thickness to show the innermost drawable ring
-          const sliceAmount = Math.max(1, Math.floor(params.sliceAmount || 10));
-          const ringThickness = previewCutSize / sliceAmount;
+          const previewSliceAmount = Math.max(
+            1,
+            Math.floor(previewCutParams.sliceAmount || 10)
+          );
+          const ringThickness = previewCutSize / previewSliceAmount;
           const adjustedPreviewSize = previewCutSize - ringThickness;
 
           const cutSizeRadius = adjustedPreviewSize / 2;
@@ -298,8 +314,13 @@ export default function sketch(p) {
       // Use GUI parameters for cut size and slice amount
       // cutSize is the outer diameter of the largest ring
       // sliceAmount is the number of divisions within that size
-      let cutSize = Math.max(1, params.cutSize || 300);
-      const sliceAmount = Math.max(1, Math.floor(params.sliceAmount || 10));
+      // For previews and placement, use the currently selected cut slot's parameters
+      const selectedCutParams = gui.getParametersForSlot(selectedCutSlot);
+      let cutSize = Math.max(1, selectedCutParams.cutSize || 300);
+      const sliceAmount = Math.max(
+        1,
+        Math.floor(selectedCutParams.sliceAmount || 10)
+      );
 
       // Clamp cutSize to fit within image bounds
       // Calculate image bounds to get maximum allowable diameter
@@ -327,13 +348,10 @@ export default function sketch(p) {
       // Calculate ring thickness (distance between consecutive rings)
       const ringThickness = cutSize / sliceAmount;
 
-      // maxDiameter is the outer size of the largest ring
-      let maxDiameter = cutSize;
-
       // Only render slices if user has clicked to place them
-      if (sliceCenterX !== null && sliceCenterY !== null) {
-        // Build circular, rotating layers into `display` sampling from patternImg
-        // Calculate image bounds on canvas to clamp slice center position
+      // Only render slices if user has placed cuts
+      if (cuts.length > 0) {
+        // Calculate common parameters needed for all cuts
         const coverDims = calculateCoverDimensions(
           loadedImage.width,
           loadedImage.height,
@@ -341,175 +359,104 @@ export default function sketch(p) {
           p.height
         );
 
-        // Apply zoom to get actual displayed dimensions
         const zoomedImageWidth = coverDims.width * params.imageZoom;
         const zoomedImageHeight = coverDims.height * params.imageZoom;
 
-        // Image is centered at (p.width/2 + posX, p.height/2 + posY)
         const imageCenterX = p.width / 2 + posX;
         const imageCenterY = p.height / 2 + posY;
 
-        // Image bounds in canvas space
         const imageLeft = imageCenterX - zoomedImageWidth / 2;
         const imageRight = imageCenterX + zoomedImageWidth / 2;
         const imageTop = imageCenterY - zoomedImageHeight / 2;
         const imageBottom = imageCenterY + zoomedImageHeight / 2;
 
-        // Clamp slice center to stay within image bounds
-        // Use same logic as preview: just the radius
-        const maxRadius = maxDiameter / 2;
-
-        const clampedCenterX = Math.max(
-          imageLeft + maxRadius,
-          Math.min(imageRight - maxRadius, sliceCenterX)
-        );
-        const clampedCenterY = Math.max(
-          imageTop + maxRadius,
-          Math.min(imageBottom - maxRadius, sliceCenterY)
-        );
-
-        const centerX = clampedCenterX;
-        const centerY = clampedCenterY;
-
-        // Determine rotation amount and speed from params
-        // Use proper null/undefined check for rotationAmount so 0 is not treated as falsy
+        // Determine rotation parameters from params
         const rotationAmount =
           params.rotationAmount !== undefined ? params.rotationAmount : rotAmt;
         const rotationSpeed = params.rotationSpeed || speed;
         const isAnimated =
           params.animated !== undefined ? params.animated : true;
 
-        // Calculate transition duration based on rotation speed
-        // Match lerp speed to animation oscillation speed
-        // The animation completes one full cycle when p.frameCount * rotationSpeed goes from 0 to 2π
-        // We want the lerp to complete in roughly 2-3 animation cycles for visual harmony
-        // Duration (ms) = (2π / rotationSpeed) / frameRate * 2.5 cycles
-        const frameRate = 60; // p5.js default
+        const frameRate = 60;
         const cycleDuration =
           ((Math.PI * 2) / Math.max(rotationSpeed, 0.0001) / frameRate) * 1000;
         rotationTransitionDuration = Math.max(500, cycleDuration * 0.05);
 
-        // Calculate rotation lerp progress (0 to 1)
-        let rotationProgress = 1.0; // Default to full rotation
+        // Calculate rotation lerp progress
+        let rotationProgress = 1.0;
         if (rotationTransitionStart !== null) {
           const elapsed = p.millis() - rotationTransitionStart;
           rotationProgress = Math.min(
             elapsed / rotationTransitionDuration,
             1.0
           );
-          // Stop tracking transition once complete
           if (rotationProgress >= 1.0) {
             rotationTransitionStart = null;
           }
         }
 
-        // Only render slices if rotation amount is not 0
-        // When rotation amount is 0, no cinetisation effect is visible
-        // Supports both positive and negative rotation values
-        if (rotationAmount !== 0) {
-          for (let i = 0; i < sliceAmount; i++) {
-            // Each ring gets progressively smaller from the outer edge
-            const currentSize = maxDiameter - i * ringThickness;
+        // Render all cuts
+        for (let cutIdx = 0; cutIdx < cuts.length; cutIdx++) {
+          const cut = cuts[cutIdx];
+          const isActiveCut = cutIdx === activeCutIndex;
 
-            // Lerp rotation amount based on transition progress
-            const lerpedRotationAmount = rotationAmount * rotationProgress;
-            const rotationMethod = params.rotationMethod || "incremental";
+          // Get the parameters for this specific cut's SLOT (not the array index!)
+          const cutParams = gui.getParametersForSlot(cut.slotIndex);
 
-            let currentRotation;
-            if (isAnimated) {
-              const animatedValue = p.map(
-                p.sin(p.frameCount * rotationSpeed),
-                -1,
-                1,
-                -lerpedRotationAmount,
-                lerpedRotationAmount
-              );
+          // Calculate this cut's size parameters
+          let cutSize = Math.max(1, cutParams.cutSize || 300);
+          const cutSliceAmount = Math.max(
+            1,
+            Math.floor(cutParams.sliceAmount || 10)
+          );
 
-              if (rotationMethod === "wave") {
-                // Wave method: each ring has a phase-offset oscillation
-                // Creates a ripple/wiggle effect across the rings with multiple cycles
-                const waveFrequency = 3; // Number of wave cycles across all rings
-                const phaseOffset =
-                  (i / sliceAmount) * Math.PI * 2 * waveFrequency;
-                const waveAmount =
-                  lerpedRotationAmount *
-                  Math.sin(p.frameCount * rotationSpeed + phaseOffset);
-                // Don't multiply by i - each ring wiggles independently
-                currentRotation = p.radians(waveAmount);
-              } else {
-                // Incremental method (default): each ring rotates progressively more
-                currentRotation = p.radians(animatedValue * i);
-              }
-            } else {
-              // Static rotation
-              if (rotationMethod === "wave") {
-                // Wave method in static mode: creates a sinusoidal rotation pattern
-                const waveFrequency = 3; // Number of wave cycles across all rings
-                const phaseOffset =
-                  (i / sliceAmount) * Math.PI * 2 * waveFrequency;
-                const waveAmount = lerpedRotationAmount * Math.sin(phaseOffset);
-                currentRotation = p.radians(waveAmount);
-              } else {
-                // Incremental method: each ring rotates progressively more
-                currentRotation = p.radians(lerpedRotationAmount * i);
-              }
-            }
-
-            const sw = Math.max(1, Math.floor(currentSize));
-            const sh = Math.max(1, Math.floor(currentSize));
-
-            // imgLayer is centered at its own center, so convert from canvas coordinates to imgLayer local coordinates
-            // The imgLayer position on canvas is determined by posX and posY
-            const imgLayerCenterX = p.width / 2 + posX;
-            const imgLayerCenterY = p.height / 2 + posY;
-
-            // Convert canvas click point to imgLayer-local coordinates
-            const localCenterX =
-              centerX - (imgLayerCenterX - imgLayer.width / 2);
-            const localCenterY =
-              centerY - (imgLayerCenterY - imgLayer.height / 2);
-
-            // sample top-left coordinates on the pattern image
-            const sx = Math.max(0, Math.floor(localCenterX - sw / 2));
-            const sy = Math.max(0, Math.floor(localCenterY - sh / 2));
-
-            // Reuse a single temp graphics buffer, resizing as needed
-            // This is much more efficient than creating a new one each iteration
-            if (!buffer || buffer.width !== sw || buffer.height !== sh) {
-              if (buffer) buffer.remove();
-              buffer = p.createGraphics(sw, sh);
-            }
-
-            buffer.clear();
-            buffer.push();
-            buffer.drawingContext.save();
-            buffer.drawingContext.beginPath();
-            buffer.drawingContext.ellipse(
-              sw / 2,
-              sh / 2,
-              sw / 2,
-              sh / 2,
-              0,
-              0,
-              Math.PI * 2
+          // Clamp to image bounds
+          if (loadedImage) {
+            const maxAllowedDiameter = Math.min(
+              zoomedImageWidth,
+              zoomedImageHeight
             );
-            buffer.drawingContext.clip();
-            buffer.image(patternImg, 0, 0, sw, sh, sx, sy, sw, sh);
-            buffer.drawingContext.restore();
-            buffer.pop();
-
-            // composite into display, centered at image center
-            display.push();
-            display.imageMode(display.CENTER);
-            display.translate(centerX, centerY);
-            display.rotate(currentRotation);
-            display.image(buffer, 0, 0);
-            display.pop();
+            if (cutSize > maxAllowedDiameter) {
+              cutSize = maxAllowedDiameter;
+            }
           }
+
+          const maxDiameter = cutSize;
+          const maxRadius = maxDiameter / 2;
+
+          // Convert cut from image-space to canvas-space for rendering
+          const canvasSpaceX = imageCenterX + cut.centerX * cutParams.imageZoom;
+          const canvasSpaceY = imageCenterY + cut.centerY * cutParams.imageZoom;
+
+          // Clamp cut center to stay within image bounds
+          const clampedCenterX = Math.max(
+            imageLeft + maxRadius,
+            Math.min(imageRight - maxRadius, canvasSpaceX)
+          );
+          const clampedCenterY = Math.max(
+            imageTop + maxRadius,
+            Math.min(imageBottom - maxRadius, canvasSpaceY)
+          );
+
+          // Render this cut's slices using its specific parameters
+          renderCutSlices(
+            clampedCenterX,
+            clampedCenterY,
+            maxDiameter,
+            cutSliceAmount,
+            cutSize,
+            cutParams.rotationAmount,
+            cutParams.rotationSpeed,
+            cutParams.animated,
+            rotationProgress,
+            isActiveCut,
+            cutParams
+          );
         }
-      } // Close the "if sliceCenterX !== null" conditional
+      } // Close the "if cuts.length > 0" conditional
 
       // Cache the ring parameters for next frame comparison
+      // (Using global params as reference for change detection)
       lastCutSize = params.cutSize;
       lastSliceAmount = params.sliceAmount;
       lastRotationAmount = params.rotationAmount;
@@ -548,7 +495,9 @@ export default function sketch(p) {
         // Clamp cursor position to image bounds
         // For the preview ellipse itself (not rotated), we just need the radius
         // Also clamp the cutSize to image bounds
-        let previewCutSize = Math.max(1, params.cutSize || 300);
+        // Use the selected cut slot's parameters for preview
+        const previewCutParams2 = gui.getParametersForSlot(selectedCutSlot);
+        let previewCutSize = Math.max(1, previewCutParams2.cutSize || 300);
         const maxAllowedDiameter = Math.min(
           zoomedImageWidth,
           zoomedImageHeight
@@ -558,7 +507,10 @@ export default function sketch(p) {
         }
 
         // Reduce preview size by one ring thickness to show the innermost drawable ring
-        const sliceAmount = Math.max(1, Math.floor(params.sliceAmount || 10));
+        const sliceAmount = Math.max(
+          1,
+          Math.floor(previewCutParams2.sliceAmount || 10)
+        );
         const ringThickness = previewCutSize / sliceAmount;
         const adjustedPreviewSize = previewCutSize - ringThickness;
 
@@ -599,9 +551,19 @@ export default function sketch(p) {
   // Track mouse movement to show preview
   p.mouseMoved = function () {
     if (loadedImage) {
-      cursorX = p.mouseX;
-      cursorY = p.mouseY;
-      showCursorPreview = true;
+      // Only show preview if mouse is within canvas bounds
+      if (
+        p.mouseX >= 0 &&
+        p.mouseX <= p.width &&
+        p.mouseY >= 0 &&
+        p.mouseY <= p.height
+      ) {
+        cursorX = p.mouseX;
+        cursorY = p.mouseY;
+        showCursorPreview = true;
+      } else {
+        showCursorPreview = false;
+      }
     }
   };
 
@@ -724,7 +686,10 @@ export default function sketch(p) {
 
       // Clamp click position to image bounds
       // For the ellipse (not rotated), we just need the radius
-      const cutSizeRadius = params.cutSize / 2;
+      // Use the selected cut slot's parameters
+      const selectedCutParamsForClick =
+        gui.getParametersForSlot(selectedCutSlot);
+      const cutSizeRadius = selectedCutParamsForClick.cutSize / 2;
 
       const clampedClickX = Math.max(
         imageLeft + cutSizeRadius,
@@ -735,10 +700,16 @@ export default function sketch(p) {
         Math.min(imageBottom - cutSizeRadius, p.mouseY)
       );
 
-      // Set slice center to clamped click position
-      sliceCenterX = clampedClickX;
-      sliceCenterY = clampedClickY;
-      // Start rotation transition when slices are placed
+      // Convert canvas coordinates to image-space coordinates
+      // This way cuts stay with the image when position/zoom changes
+      const imageSpaceX = (clampedClickX - imageCenterX) / params.imageZoom;
+      const imageSpaceY = (clampedClickY - imageCenterY) / params.imageZoom;
+
+      // Place or move cut in the currently selected slot
+      placeCutInSlot(selectedCutSlot, imageSpaceX, imageSpaceY);
+      console.log(`Cut placed in slot ${selectedCutSlot}`);
+
+      // Start rotation transition when a cut is active
       rotationTransitionStart = p.millis();
       // Hide cursor preview after clicking
       showCursorPreview = false;
@@ -781,6 +752,346 @@ export default function sketch(p) {
     canvasElement.style.height = `${params.canvasHeight * scale}px`;
   }
 
+  // ==================== Multiple Cuts Management ====================
+
+  /**
+   * Render a single cut's slices to the display layer
+   * @param {number} centerX - X coordinate of cut center in canvas space
+   * @param {number} centerY - Y coordinate of cut center in canvas space
+   * @param {number} maxDiameter - Size of the largest ring
+   * @param {number} sliceAmount - Number of slices
+   * @param {number} cutSize - Size parameter
+   * @param {number} rotationAmount - Amount to rotate
+   * @param {number} rotationSpeed - Speed of animation
+   * @param {boolean} isAnimated - Whether animation is on
+   * @param {number} rotationProgress - Progress of lerp animation (0-1)
+   * @param {number} posX - Image pan X
+   * @param {number} posY - Image pan Y
+   */
+  function renderCutSlices(
+    centerX,
+    centerY,
+    maxDiameter,
+    sliceAmount,
+    cutSize,
+    rotationAmount,
+    rotationSpeed,
+    isAnimated,
+    rotationProgress,
+    isActiveCut,
+    cutParams = params
+  ) {
+    const ringThickness = cutSize / sliceAmount;
+
+    // Only render slices if rotation amount is not 0
+    if (rotationAmount === 0) return;
+
+    for (let i = 0; i < sliceAmount; i++) {
+      const currentSize = maxDiameter - i * ringThickness;
+
+      // Lerp rotation amount based on transition progress
+      const lerpedRotationAmount = rotationAmount * rotationProgress;
+      const rotationMethod = cutParams.rotationMethod || "incremental";
+
+      let currentRotation;
+      if (isAnimated) {
+        const animatedValue = p.map(
+          p.sin(p.frameCount * rotationSpeed),
+          -1,
+          1,
+          -lerpedRotationAmount,
+          lerpedRotationAmount
+        );
+
+        if (rotationMethod === "wave") {
+          const waveFrequency = 3;
+          const phaseOffset = (i / sliceAmount) * Math.PI * 2 * waveFrequency;
+          const waveAmount =
+            lerpedRotationAmount *
+            Math.sin(p.frameCount * rotationSpeed + phaseOffset);
+          currentRotation = p.radians(waveAmount);
+        } else {
+          currentRotation = p.radians(animatedValue * i);
+        }
+      } else {
+        if (rotationMethod === "wave") {
+          const waveFrequency = 3;
+          const phaseOffset = (i / sliceAmount) * Math.PI * 2 * waveFrequency;
+          const waveAmount = lerpedRotationAmount * Math.sin(phaseOffset);
+          currentRotation = p.radians(waveAmount);
+        } else {
+          currentRotation = p.radians(lerpedRotationAmount * i);
+        }
+      }
+
+      const sw = Math.max(1, Math.ceil(currentSize));
+      const sh = Math.max(1, Math.ceil(currentSize));
+
+      // Use a 2x resolution buffer for better quality
+      const bufferScale = 2;
+      const bufferW = Math.ceil(sw * bufferScale);
+      const bufferH = Math.ceil(sh * bufferScale);
+
+      // centerX and centerY are already in canvas space
+      // Calculate local coordinates within the image layer
+      const localCenterX = centerX - (p.width / 2 - imgLayer.width / 2);
+      const localCenterY = centerY - (p.height / 2 - imgLayer.height / 2);
+
+      // Clamp source coordinates to stay within patternImg bounds
+      const sx = Math.max(
+        0,
+        Math.min(patternImg.width - sw, localCenterX - sw / 2)
+      );
+      const sy = Math.max(
+        0,
+        Math.min(patternImg.height - sh, localCenterY - sh / 2)
+      );
+
+      if (!buffer || buffer.width !== bufferW || buffer.height !== bufferH) {
+        if (buffer) buffer.remove();
+        buffer = p.createGraphics(bufferW, bufferH);
+      }
+
+      buffer.clear();
+      buffer.push();
+      buffer.drawingContext.save();
+      buffer.drawingContext.beginPath();
+      buffer.drawingContext.ellipse(
+        bufferW / 2,
+        bufferH / 2,
+        bufferW / 2,
+        bufferH / 2,
+        0,
+        0,
+        Math.PI * 2
+      );
+      buffer.drawingContext.clip();
+      buffer.image(patternImg, 0, 0, bufferW, bufferH, sx, sy, sw, sh);
+      buffer.drawingContext.restore();
+      buffer.pop();
+
+      display.push();
+      display.imageMode(display.CENTER);
+      display.translate(centerX, centerY);
+      display.rotate(currentRotation);
+      display.image(buffer, 0, 0, sw, sh);
+      display.pop();
+    }
+  }
+
+  /**
+   * Add a new cut at the specified position
+   * @param {number} centerX - X coordinate of cut center
+   * @param {number} centerY - Y coordinate of cut center
+   * @returns {number} - Index of the newly added cut
+   */
+  /**
+   * Place or move a cut in a specific slot
+   * @param {number} slotIndex - Slot index (0-5)
+   * @param {number} centerX - X coordinate in image space
+   * @param {number} centerY - Y coordinate in image space
+   */
+  function placeCutInSlot(slotIndex, centerX, centerY) {
+    if (slotIndex < 0 || slotIndex >= 6) return;
+
+    // Place the cut in the slot - only store location
+    // Parameters are managed by GUI's cutParametersMap
+    cutSlots[slotIndex] = {
+      centerX: centerX,
+      centerY: centerY,
+    };
+
+    selectedCutSlot = slotIndex;
+    updateCutsArray(); // Update the cuts array for rendering
+    console.log(`Placed cut in slot ${slotIndex}`);
+  }
+
+  /**
+   * Update the cuts array from cutSlots (for backwards compatibility)
+   */
+  function updateCutsArray() {
+    cuts = [];
+    cutSlots.forEach((cut, slotIndex) => {
+      if (cut !== null) {
+        cuts.push({
+          ...cut,
+          slotIndex: slotIndex,
+        });
+      }
+    });
+  }
+
+  /**
+   * Select a cut slot
+   * @param {number} slotIndex - Slot index to select (0-5)
+   */
+  function selectCutSlot(slotIndex) {
+    if (slotIndex >= 0 && slotIndex < 6) {
+      selectedCutSlot = slotIndex;
+
+      // Clear caches when switching cuts to force re-render with new cut's parameters
+      lastCutSize = null;
+      lastSliceAmount = null;
+      lastRotationAmount = null;
+      lastRotationMethod = null;
+      lastDisplayPosX = null;
+      lastDisplayPosY = null;
+      lastDisplayZoom = null;
+      lastPatternPosX = null;
+      lastPatternPosY = null;
+      lastPatternZoom = null;
+      patternImg = null;
+
+      // Parameters are managed by GUI - they'll send us the right ones via onParameterChange
+      console.log(`Selected cut slot ${slotIndex}`);
+    }
+  }
+  /**
+   * Clear a specific cut slot
+   * @param {number} slotIndex - Slot index to clear
+   */
+  function clearCutSlot(slotIndex) {
+    if (slotIndex >= 0 && slotIndex < 6) {
+      cutSlots[slotIndex] = null;
+      updateCutsArray();
+    }
+  }
+
+  /**
+   * Clear all cuts
+   */
+  function clearAllCuts() {
+    cutSlots = [null, null, null, null, null, null];
+    cuts = [];
+    selectedCutSlot = 0;
+  }
+
+  /**
+   * Add a new cut at the specified position
+   * @param {number} centerX - X coordinate of cut center
+   * @param {number} centerY - Y coordinate of cut center
+   * @returns {number} - Index of the newly added cut
+   */
+  function addCut(centerX, centerY) {
+    // Cap at 6 cuts maximum
+    if (cuts.length >= 6) {
+      console.warn("Maximum of 6 cuts reached");
+      return null;
+    }
+    const newCut = {
+      id: nextCutId++,
+      centerX: centerX,
+      centerY: centerY,
+    };
+    cuts.push(newCut);
+    activeCutIndex = cuts.length - 1; // Select the newly added cut
+    console.log(`Cut added at (${centerX}, ${centerY}), ID: ${newCut.id}`);
+    return activeCutIndex;
+  }
+
+  /**
+   * Remove the active cut
+   */
+  function removeActiveCut() {
+    if (activeCutIndex === null || cuts.length === 0) {
+      console.warn("No active cut to remove");
+      return;
+    }
+    const removedCut = cuts[activeCutIndex];
+    cuts.splice(activeCutIndex, 1);
+
+    // Update active cut index
+    if (cuts.length === 0) {
+      activeCutIndex = null;
+    } else if (activeCutIndex >= cuts.length) {
+      activeCutIndex = cuts.length - 1;
+    }
+    console.log(`Cut removed, ID: ${removedCut.id}`);
+  }
+
+  /**
+   * Select a cut by index
+   */
+  function selectCut(index) {
+    if (index >= 0 && index < cuts.length) {
+      activeCutIndex = index;
+    }
+  }
+
+  /**
+   * Check if a position is close to an existing cut (for click detection)
+   * @param {number} x - X coordinate
+   * @param {number} y - Y coordinate
+   * @param {number} tolerance - Distance tolerance in pixels
+   * @returns {number} - Index of nearby cut, or -1 if none found
+   */
+  function findNearestCut(x, y, tolerance = 20) {
+    for (let i = 0; i < cuts.length; i++) {
+      const dx = cuts[i].centerX - x;
+      const dy = cuts[i].centerY - y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      if (distance <= tolerance) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  /**
+   * Clear all cuts
+   */
+  function clearAllCuts() {
+    cuts = [];
+    activeCutIndex = null;
+    console.log("All cuts cleared");
+  }
+
+  /**
+   * Get information about current cuts state
+   * @returns {string} - Human-readable cuts info
+   */
+  function getCutsInfo() {
+    if (cuts.length === 0) {
+      return "No cuts yet. Click on the image to add one.";
+    } else if (activeCutIndex === null) {
+      return `${cuts.length} cut${
+        cuts.length !== 1 ? "s" : ""
+      } placed. Click to select.`;
+    } else {
+      return `${cuts.length} cut${cuts.length !== 1 ? "s" : ""} placed. Cut ${
+        activeCutIndex + 1
+      } selected.`;
+    }
+  }
+
+  /**
+   * Get the indices of cuts that have been placed (for GUI button highlighting)
+   * @returns {array} - Array of cut indices that have cuts placed
+   */
+  /**
+   * Get the indices of cuts that have been placed (for GUI button highlighting)
+   * @returns {array} - Array of cut slot indices (0-5) that have cuts placed
+   */
+  function getCutIndices() {
+    const usedIndices = [];
+    cutSlots.forEach((cut, slotIndex) => {
+      if (cut !== null) {
+        usedIndices.push(slotIndex);
+      }
+    });
+    return usedIndices;
+  }
+
+  /**
+   * Check if there is an active cut
+   * @returns {boolean}
+   */
+  function hasActiveCut() {
+    return activeCutIndex !== null && cuts.length > 0;
+  }
+
+  // ==================== Event Handlers ====================
+
   // Called when image is uploaded via GUI
   function handleImageLoaded(imageDataUrl) {
     // Use instance's loadImage so the image becomes a p5.Image bound to this instance
@@ -804,9 +1115,11 @@ export default function sketch(p) {
       lastDisplayPosY = null;
       lastDisplayZoom = null;
 
-      // Clear slice placement with new image
-      sliceCenterX = null;
-      sliceCenterY = null;
+      // Clear all cuts with new image
+      cutSlots = [null, null, null, null, null, null];
+      cuts = [];
+      selectedCutSlot = 0;
+      activeCutIndex = null;
       rotationTransitionStart = null;
 
       // Update zoom and position slider bounds based on image dimensions
@@ -881,10 +1194,7 @@ export default function sketch(p) {
   }
 
   function handleParameterChange(paramName, value, allParameters) {
-    params = allParameters;
-    console.log(`Parameter ${paramName} changed to ${value}`);
-
-    // Resize canvas if dimensions changed
+    params = allParameters; // Resize canvas if dimensions changed
     if (paramName === "canvasWidth" || paramName === "canvasHeight") {
       p.resizeCanvas(params.canvasWidth, params.canvasHeight);
       scaleCanvasToFit(); // Re-scale after resize
@@ -894,9 +1204,10 @@ export default function sketch(p) {
       imgLayer = p.createGraphics(params.canvasWidth, params.canvasHeight);
       display = p.createGraphics(params.canvasWidth, params.canvasHeight);
 
-      // Clear slice placement since coordinates are now invalid in new canvas
-      sliceCenterX = null;
-      sliceCenterY = null;
+      // Clear all cuts since coordinates are now invalid in new canvas
+      cuts = [];
+      activeCutIndex = null;
+      nextCutId = 0;
       rotationTransitionStart = null;
 
       // Invalidate pattern cache since canvas size changed
@@ -923,14 +1234,24 @@ export default function sketch(p) {
   }
 
   function handleSave() {
+    // Temporarily hide the guide circle during export
+    const guideCircleWasVisible = showGuideCircle;
+    showGuideCircle = false;
+
+    // Wait a frame to ensure the guide circle is not drawn
+    p.draw();
+
+    // Save the canvas
     p.saveCanvas("output", "png");
     console.log("Canvas saved");
+
+    // Restore the guide circle visibility
+    showGuideCircle = guideCircleWasVisible;
   }
 
   function handleReset() {
-    // Clear slice placement
-    sliceCenterX = null;
-    sliceCenterY = null;
+    // Clear all cuts
+    clearAllCuts();
 
     // Reset image transform directly in params object
     params.imagePosX = 0;
@@ -968,7 +1289,7 @@ export default function sketch(p) {
       }, 0);
     }
 
-    console.log("Image reset to initial state");
+    console.log("Image reset to initial state - all cuts cleared");
   }
 
   // mouseWheel handler for adjusting cut size
@@ -1005,6 +1326,55 @@ export default function sketch(p) {
 
     // Prevent default scroll behavior
     return false;
+  };
+
+  /**
+   * DEBUG: Get current state of the cut system for diagnostics
+   * @returns {object} - Comprehensive state information
+   */
+  function getDebugInfo() {
+    return {
+      selectedCutSlot,
+      cutSlots: cutSlots.map((cut, idx) => ({
+        slotIndex: idx,
+        hasCut: cut !== null,
+        cut: cut,
+      })),
+      currentParameters: { ...params },
+      activeCuts: cuts.length,
+    };
+  }
+
+  /**
+   * DEBUG: Log per-cut parameter state for verification
+   */
+  function logCutParameterState() {
+    console.log("=== CUT PARAMETER STATE ===");
+    console.log("Selected Slot:", selectedCutSlot);
+    cutSlots.forEach((cut, idx) => {
+      if (cut !== null) {
+        console.log(`Slot ${idx}:`, {
+          center: { x: cut.centerX, y: cut.centerY },
+          // Note: Parameters are stored in GUI's cutParametersMap
+        });
+      } else {
+        console.log(`Slot ${idx}: [empty]`);
+      }
+    });
+    console.log("Current Global Params:", params);
+    console.log("===========================");
+  }
+
+  // Expose debug functions globally for testing
+  window.cinetiserDebug = {
+    getDebugInfo,
+    logCutParameterState,
+    getCutSlots: () => cutSlots,
+    getSelectedSlot: () => selectedCutSlot,
+    getParams: () => params,
+    getCutParametersMap: () =>
+      window.gui ? window.gui.cutParametersMap : null,
+    getCurrentCutIndex: () => (window.gui ? window.gui.currentCutIndex : null),
   };
 }
 

@@ -75,6 +75,15 @@ function generateGUIControls() {
     header.textContent = sectionConfig.title;
     guiSection.appendChild(header);
 
+    // If this is the Cinestation section, insert the cut buttons grid
+    if (sectionKey === "cinetisation") {
+      const cutsGrid = document.getElementById("cuts-grid");
+      if (cutsGrid) {
+        // Move the cuts grid to be right after this header
+        guiSection.appendChild(cutsGrid);
+      }
+    }
+
     // Add controls for this section
     controls.forEach(({ key, config }) => {
       const containerDiv = document.createElement("div");

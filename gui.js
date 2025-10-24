@@ -15,6 +15,9 @@ class GUIController {
     // Reference to sketch instance (set by sketch.js)
     this.sketch = null;
 
+    // Flag to prevent event listeners from firing during programmatic updates
+    this.isUpdatingControls = false;
+
     this.initializeControls();
     this.setupEventListeners();
   }
@@ -73,9 +76,18 @@ class GUIController {
 
     console.log("Final controls object:", this.controls);
 
+    // Cuts selector grid
+    this.cutsGrid = document.getElementById("cuts-grid");
+    this.cutButtons = [];
+    this.currentCutIndex = 0; // Default to Cut 1 (index 0)
+    this.cutParametersMap = {}; // Store parameters for each cut: {cutIndex: {paramKey: value, ...}}
+
+    this.initializeCutsGrid();
+
     // Buttons
     this.saveBtn = document.getElementById("saveBtn");
     this.resetBtn = document.getElementById("resetBtn");
+
     this.guiToggleBtn = document.getElementById("gui-toggle");
     this.guiCloseBtn = document.getElementById("gui-close");
     this.guiPanel = document.getElementById("gui-panel");
@@ -106,6 +118,7 @@ class GUIController {
       // Select/dropdown control
       if (control.select) {
         control.select.addEventListener("change", (e) => {
+          if (this.isUpdatingControls) return; // Skip if programmatically set
           const value = e.target.value;
           this.parameters[param] = value;
           this.onParameterChange(param, value);
@@ -113,6 +126,7 @@ class GUIController {
       } else if (control.slider && control.input) {
         // Sync slider and number input with validation
         control.slider.addEventListener("input", (e) => {
+          if (this.isUpdatingControls) return; // Skip if programmatically set
           const sliderMin = parseFloat(control.slider.min);
           const sliderMax = parseFloat(control.slider.max);
           const value = clampParameter(
@@ -127,6 +141,7 @@ class GUIController {
         });
 
         control.input.addEventListener("input", (e) => {
+          if (this.isUpdatingControls) return; // Skip if programmatically set
           const sliderMin = parseFloat(control.slider.min);
           const sliderMax = parseFloat(control.slider.max);
           const value = clampParameter(
@@ -144,6 +159,7 @@ class GUIController {
         if (GUI_CONFIG[param]?.type === "boolean") {
           // checkbox / boolean control
           control.slider.addEventListener("change", (e) => {
+            if (this.isUpdatingControls) return; // Skip if programmatically set
             const checked = e.target.checked;
             this.parameters[param] = checked;
             this.onParameterChange(param, checked);
@@ -156,6 +172,7 @@ class GUIController {
         } else {
           // slider only (effect parameters)
           control.slider.addEventListener("input", (e) => {
+            if (this.isUpdatingControls) return; // Skip if programmatically set
             const sliderMin = parseFloat(control.slider.min);
             const sliderMax = parseFloat(control.slider.max);
             const value = clampParameter(
@@ -205,6 +222,136 @@ class GUIController {
     });
   }
 
+  initializeCutsGrid() {
+    // Create 6 cut selector buttons (3 rows of 2)
+    if (!this.cutsGrid) return;
+
+    this.cutsGrid.innerHTML = "";
+    this.cutButtons = [];
+
+    for (let i = 0; i < 6; i++) {
+      const button = document.createElement("button");
+      button.className = "cut-selector-btn";
+      if (i === 0) {
+        button.classList.add("active"); // Cut 1 is active by default
+      }
+      button.textContent = `Cut ${i + 1}`;
+      button.dataset.cutIndex = i;
+
+      button.addEventListener("click", () => this.selectCut(i));
+
+      this.cutsGrid.appendChild(button);
+      this.cutButtons.push(button);
+    }
+
+    // Initialize cut parameters map - each cut gets its OWN independent copy
+    for (let i = 0; i < 6; i++) {
+      // Create a completely new object for each cut
+      this.cutParametersMap[i] = JSON.parse(JSON.stringify(this.parameters));
+    }
+    console.log("✅ Cut parameters map initialized with independent copies");
+
+    // Start with cut 0's parameters
+    this.parameters = this.cutParametersMap[0];
+    console.log("✅ this.parameters now points to cutParametersMap[0]");
+  }
+
+  selectCut(cutIndex) {
+    console.log(`\n${"=".repeat(60)}`);
+    console.log(`>>> SELECTING CUT ${cutIndex}`);
+    console.log(`${"=".repeat(60)}`);
+
+    // Step 1: Update active button
+    this.cutButtons.forEach((btn, idx) => {
+      btn.classList.toggle("active", idx === cutIndex);
+    });
+
+    // Step 2: Switch to the selected cut
+    this.currentCutIndex = cutIndex;
+
+    console.log(
+      `Before assignment: this.parameters === cutParametersMap[${cutIndex}]? ${
+        this.parameters === this.cutParametersMap[cutIndex]
+      }`
+    );
+
+    this.parameters = this.cutParametersMap[cutIndex];
+
+    console.log(
+      `After assignment: this.parameters === cutParametersMap[${cutIndex}]? ${
+        this.parameters === this.cutParametersMap[cutIndex]
+      }`
+    );
+    console.log(`  this.parameters.cutSize = ${this.parameters.cutSize}`);
+    console.log(
+      `  cutParametersMap[${cutIndex}].cutSize = ${this.cutParametersMap[cutIndex].cutSize}`
+    );
+
+    // Step 3: Notify sketch to clear caches BEFORE updating GUI
+    // This ensures caches are cleared before any slider events fire
+    if (this.sketch && this.sketch.selectCutSlot) {
+      this.sketch.selectCutSlot(cutIndex);
+    }
+
+    // Step 4: Update GUI controls (after caches are cleared)
+    this.updateControlsFromParameters();
+
+    console.log(`${"=".repeat(60)}\n`);
+  }
+
+  /**
+   * Get parameters for a specific cut slot (used by sketch for rendering each cut)
+   */
+  getParametersForSlot(slotIndex) {
+    if (slotIndex < 0 || slotIndex >= 6) {
+      console.warn(`Invalid slot index: ${slotIndex}`);
+      return this.getDefaultParameters();
+    }
+    const params = this.cutParametersMap[slotIndex];
+    return params;
+  }
+
+  updateControlsFromParameters() {
+    // Set flag so event listeners know this is a programmatic update
+    this.isUpdatingControls = true;
+
+    // Update all control values to match current parameters
+    Object.keys(this.controls).forEach((paramKey) => {
+      const value = this.parameters[paramKey];
+      const control = this.controls[paramKey];
+
+      if (control.slider) {
+        control.slider.value = value;
+        if (control.slider.type === "checkbox") {
+          control.slider.checked = value;
+        }
+      }
+      if (control.input) {
+        control.input.value = value;
+      }
+      if (control.select) {
+        control.select.value = value;
+      }
+    });
+
+    // Clear flag
+    this.isUpdatingControls = false;
+  }
+
+  updateCutButtonStates() {
+    // Update which buttons show as "has-cut" based on sketch's cuts array
+    if (!this.sketch || !this.sketch.getCutIndices) return;
+
+    const cutIndices = this.sketch.getCutIndices();
+    this.cutButtons.forEach((btn, idx) => {
+      if (cutIndices.includes(idx)) {
+        btn.classList.add("has-cut");
+      } else {
+        btn.classList.remove("has-cut");
+      }
+    });
+  }
+
   applyCanvasPreset(width, height) {
     // Update parameter values
     this.parameters.canvasWidth = width;
@@ -243,7 +390,14 @@ class GUIController {
   }
 
   onParameterChange(paramName, value) {
-    // Notify sketch of parameter change if connected
+    if (this.isUpdatingControls) {
+      return;
+    }
+
+    // Update current cut's parameters
+    this.parameters[paramName] = value;
+
+    // Notify sketch
     if (this.sketch && this.sketch.onParameterChange) {
       this.sketch.onParameterChange(paramName, value, this.parameters);
     }
@@ -358,6 +512,7 @@ class GUIController {
     }
 
     this.parameters[paramKey] = value;
+
     // If numeric control with input
     if (control.input) {
       control.slider.value = value;
@@ -394,6 +549,43 @@ class GUIController {
   // Method to connect the sketch instance
   connectSketch(sketch) {
     this.sketch = sketch;
+  }
+
+  /**
+   * DEBUG: Get per-cut parameter state for diagnostics
+   * @returns {object} - Complete per-cut parameter information
+   */
+  getPerCutParameterState() {
+    console.log("=== PER-CUT PARAMETER STATE ===");
+    console.log("Current Cut Index:", this.currentCutIndex);
+    console.log("Current Parameters:", { ...this.parameters });
+    console.log("\nAll Cut Parameters:");
+    for (let i = 0; i < 6; i++) {
+      console.log(`  Slot ${i}:`, { ...this.cutParametersMap[i] });
+    }
+    console.log("================================\n");
+    return {
+      currentCutIndex: this.currentCutIndex,
+      currentParameters: { ...this.parameters },
+      allCutParameters: Object.fromEntries(
+        Array.from({ length: 6 }, (_, i) => [
+          i,
+          { ...this.cutParametersMap[i] },
+        ])
+      ),
+    };
+  }
+
+  /**
+   * DEBUG: Verify a specific parameter is different between cuts
+   */
+  verifyParameterIndependence(paramName) {
+    const values = Array.from({ length: 6 }, (_, i) => ({
+      slot: i,
+      value: this.cutParametersMap[i]?.[paramName],
+    }));
+    console.log(`Parameter "${paramName}" values across cuts:`, values);
+    return values;
   }
 }
 

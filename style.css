@@ -57,7 +57,7 @@ canvas {
     font-weight: normal;
     color: #ffffff;
     margin: 0;
-    z-index: 1100;
+    z-index: 0;
 }
 
 /* Main layout container */
@@ -221,7 +221,7 @@ input[type="number"] {
     font-size: 11px;
     cursor: pointer;
     font-family: 'Satoshi', Arial, sans-serif;
-    margin-top: 5px;
+    margin: 5px 0;
 }
 
 .gui-select:hover {
@@ -288,14 +288,15 @@ input[type="number"] {
 
 .gui-section-separator {
     height: 1px;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.5);
+    margin: 25px 0;
 }
 
 .gui-section-header {
     font-size: 14px;
     font-weight: normal;
     color: #ffffff;
-    margin-bottom: 15px;
+    margin-bottom: 10px;
     letter-spacing: 0.5px;
 }
 
@@ -432,4 +433,47 @@ input[type="file"] {
 
 .switch input:checked+.switch-slider:before {
     transform: translateX(20px);
+}
+
+/* Cuts Selector Grid */
+.cuts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5px;
+    margin-top: 0px;
+    margin-bottom: 10px;
+}
+
+.cut-selector-btn {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #888888;
+    padding: 5px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 10px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    font-family: 'Satoshi', Arial, sans-serif;
+    margin: 0;
+}
+
+.cut-selector-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.cut-selector-btn.active {
+    background: rgba(255, 255, 255, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    color: #ffffff;
+}
+
+.cut-selector-btn.has-cut {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.cut-selector-btn.has-cut.active {
+    background: rgba(255, 255, 255, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.6);
 }
