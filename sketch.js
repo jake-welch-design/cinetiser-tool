@@ -1,5 +1,5 @@
 import gui from "./gui.js";
-import { getDefaultParameters } from "./modules/config.js";
+import { getDefaultParameters, GUI_CONFIG } from "./modules/config.js";
 import {
   drawImageCover,
   drawImageContain,
@@ -507,15 +507,16 @@ export default function sketch(p) {
         const ringThickness = previewCutSize / sliceAmount;
         const adjustedPreviewSize = previewCutSize - ringThickness;
 
-        const cutSizeRadius = adjustedPreviewSize / 2;
+        const maxRadius = adjustedPreviewSize / 2;
 
+        // Clamp cursor position to stay within image bounds for preview
         const clampedCursorX = Math.max(
-          imageLeft + cutSizeRadius,
-          Math.min(imageRight - cutSizeRadius, cursorX)
+          imageLeft + maxRadius,
+          Math.min(imageRight - maxRadius, cursorX)
         );
         const clampedCursorY = Math.max(
-          imageTop + cutSizeRadius,
-          Math.min(imageBottom - cutSizeRadius, cursorY)
+          imageTop + maxRadius,
+          Math.min(imageBottom - maxRadius, cursorY)
         );
 
         p.stroke(255, 0, 0); // Red stroke
@@ -862,6 +863,42 @@ export default function sketch(p) {
     p.saveCanvas("output", "png");
     console.log("Canvas saved");
   }
+
+  // mouseWheel handler for adjusting cut size
+  p.mouseWheel = function (event) {
+    // Only adjust if mouse is over the canvas
+    if (
+      p.mouseX < 0 ||
+      p.mouseX > p.width ||
+      p.mouseY < 0 ||
+      p.mouseY > p.height
+    ) {
+      return; // Don't prevent default scroll if not over canvas
+    }
+
+    // Adjust cut size with scroll wheel
+    // Positive delta = scroll down = decrease size
+    // Negative delta = scroll up = increase size
+    const scrollSensitivity = 10; // pixels per scroll notch
+    const delta = event.deltaY > 0 ? scrollSensitivity : -scrollSensitivity;
+
+    // Get current cut size from GUI
+    const currentCutSize = gui.parameters.cutSize || 300;
+    const config = GUI_CONFIG.cutSize || {};
+
+    // Calculate new cut size with bounds
+    let newCutSize = currentCutSize - delta;
+    newCutSize = Math.max(
+      config.min || 100,
+      Math.min(config.max || 1920, newCutSize)
+    );
+
+    // Update GUI and sketch
+    gui.updateParameterValue("cutSize", newCutSize);
+
+    // Prevent default scroll behavior
+    return false;
+  };
 }
 
 // Auto-instantiate the sketch when p5 is available
