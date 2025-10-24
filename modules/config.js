@@ -100,6 +100,18 @@ export const GUI_CONFIG = {
     label: "Animated",
     section: "cinetisation",
   },
+
+  // Rotation method: "incremental" or "wave"
+  rotationMethod: {
+    default: "incremental",
+    type: "select",
+    options: [
+      { value: "incremental", label: "Swirl" },
+      { value: "wave", label: "Ripple" },
+    ],
+    label: "Rotation method",
+    section: "cinetisation",
+  },
 };
 
 // Define sections and their display properties
@@ -138,12 +150,15 @@ export function validateParameter(key, value) {
   return numValue >= config.min && numValue <= config.max;
 }
 
-export function clampParameter(key, value) {
+export function clampParameter(key, value, customMin = null, customMax = null) {
   const config = GUI_CONFIG[key];
   if (!config) return value;
 
   const numValue = parseFloat(value);
-  return Math.max(config.min, Math.min(config.max, numValue));
+  // Use custom bounds if provided (for dynamically updated bounds), otherwise use config defaults
+  const min = customMin !== null ? customMin : config.min;
+  const max = customMax !== null ? customMax : config.max;
+  return Math.max(min, Math.min(max, numValue));
 }
 
 export function getCanvasPresets() {

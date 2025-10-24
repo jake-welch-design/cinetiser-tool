@@ -38,15 +38,21 @@ class GUIController {
     Object.keys(GUI_CONFIG).forEach((paramKey) => {
       const slider = document.getElementById(paramKey);
       const input = document.getElementById(paramKey + "Value");
+      const select = document.querySelector(`select#${paramKey}`);
 
       const config = GUI_CONFIG[paramKey] || {};
 
       console.log(`Searching for ${paramKey}:`, {
         sliderFound: !!slider,
         inputFound: !!input,
+        selectFound: !!select,
       });
 
-      if (slider) {
+      if (select) {
+        // Select/dropdown control
+        this.controls[paramKey] = { select };
+        console.log(`✓ Select control registered for: ${paramKey}`);
+      } else if (slider) {
         if (config.type === "boolean") {
           // checkbox/switch
           this.controls[paramKey] = { slider };
@@ -69,6 +75,7 @@ class GUIController {
 
     // Buttons
     this.saveBtn = document.getElementById("saveBtn");
+    this.resetBtn = document.getElementById("resetBtn");
     this.guiToggleBtn = document.getElementById("gui-toggle");
     this.guiCloseBtn = document.getElementById("gui-close");
     this.guiPanel = document.getElementById("gui-panel");
@@ -96,18 +103,38 @@ class GUIController {
     Object.keys(this.controls).forEach((param) => {
       const control = this.controls[param];
 
-      // If this control has both slider and numeric input (canvas dimensions only)
-      if (control.slider && control.input) {
+      // Select/dropdown control
+      if (control.select) {
+        control.select.addEventListener("change", (e) => {
+          const value = e.target.value;
+          this.parameters[param] = value;
+          this.onParameterChange(param, value);
+        });
+      } else if (control.slider && control.input) {
         // Sync slider and number input with validation
         control.slider.addEventListener("input", (e) => {
-          const value = clampParameter(param, e.target.value);
+          const sliderMin = parseFloat(control.slider.min);
+          const sliderMax = parseFloat(control.slider.max);
+          const value = clampParameter(
+            param,
+            e.target.value,
+            sliderMin,
+            sliderMax
+          );
           this.parameters[param] = value;
           control.input.value = value;
           this.onParameterChange(param, value);
         });
 
         control.input.addEventListener("input", (e) => {
-          const value = clampParameter(param, e.target.value);
+          const sliderMin = parseFloat(control.slider.min);
+          const sliderMax = parseFloat(control.slider.max);
+          const value = clampParameter(
+            param,
+            e.target.value,
+            sliderMin,
+            sliderMax
+          );
           this.parameters[param] = value;
           control.slider.value = value;
           this.onParameterChange(param, value);
@@ -129,7 +156,14 @@ class GUIController {
         } else {
           // slider only (effect parameters)
           control.slider.addEventListener("input", (e) => {
-            const value = clampParameter(param, e.target.value);
+            const sliderMin = parseFloat(control.slider.min);
+            const sliderMax = parseFloat(control.slider.max);
+            const value = clampParameter(
+              param,
+              e.target.value,
+              sliderMin,
+              sliderMax
+            );
             this.parameters[param] = value;
             this.onParameterChange(param, value);
           });
@@ -150,6 +184,9 @@ class GUIController {
     // Button handlers
     if (this.saveBtn) {
       this.saveBtn.addEventListener("click", () => this.saveImage());
+    }
+    if (this.resetBtn) {
+      this.resetBtn.addEventListener("click", () => this.resetImage());
     }
     if (this.guiToggleBtn) {
       this.guiToggleBtn.addEventListener("click", () => this.openGui());
@@ -218,6 +255,15 @@ class GUIController {
       this.sketch.saveCanvas();
     } else {
       console.warn("No save function available");
+    }
+  }
+
+  resetImage() {
+    // Call sketch's reset function if available
+    if (this.sketch && this.sketch.resetImage) {
+      this.sketch.resetImage();
+    } else {
+      console.warn("No reset function available");
     }
   }
 

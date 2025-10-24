@@ -31,6 +31,9 @@ export default function sketch(p) {
   let rotationTransitionStart = null; // timestamp when rotation starts
   let rotationTransitionDuration = 1000; // milliseconds (1 second) - updated based on rotationSpeed
 
+  // UI state
+  let showGuideCircle = true; // Toggle for red guide circle with 'h' key
+
   // Pattern image caching for performance
   let patternImg = null;
   let lastPatternPosX = null;
@@ -41,6 +44,7 @@ export default function sketch(p) {
   let lastCutSize = null;
   let lastSliceAmount = null;
   let lastRotationAmount = null;
+  let lastRotationMethod = null;
   let lastDisplayPosX = null;
   let lastDisplayPosY = null;
   let lastDisplayZoom = null;
@@ -72,6 +76,7 @@ export default function sketch(p) {
       onImageLoaded: handleImageLoaded,
       onParameterChange: handleParameterChange,
       saveCanvas: handleSave,
+      resetImage: handleReset,
     });
 
     // Listen for window resize to keep canvas fitted
@@ -81,6 +86,12 @@ export default function sketch(p) {
   };
 
   p.draw = function () {
+    // Check for 'h' key to toggle guide circle visibility
+    if ((p.key === "h" || p.key === "H") && p.keyIsPressed) {
+      showGuideCircle = !showGuideCircle;
+      p.key = ""; // Clear key to prevent repeated toggles
+    }
+
     p.background(0);
 
     if (loadedImage) {
@@ -94,7 +105,8 @@ export default function sketch(p) {
       const ringParametersChanged =
         lastCutSize !== params.cutSize ||
         lastSliceAmount !== params.sliceAmount ||
-        lastRotationAmount !== params.rotationAmount;
+        lastRotationAmount !== params.rotationAmount ||
+        lastRotationMethod !== params.rotationMethod;
 
       // Check if image position or zoom has changed
       const imageTransformChanged =
@@ -205,15 +217,17 @@ export default function sketch(p) {
             Math.min(imageBottom - cutSizeRadius, cursorY)
           );
 
-          p.stroke(255, 0, 0);
-          p.strokeWeight(1);
-          p.noFill();
-          p.ellipse(
-            clampedCursorX,
-            clampedCursorY,
-            adjustedPreviewSize,
-            adjustedPreviewSize
-          );
+          if (showGuideCircle) {
+            p.stroke(255, 0, 0);
+            p.strokeWeight(1);
+            p.noFill();
+            p.ellipse(
+              clampedCursorX,
+              clampedCursorY,
+              adjustedPreviewSize,
+              adjustedPreviewSize
+            );
+          }
         }
         return; // Skip the rest of rendering
       }
@@ -399,25 +413,65 @@ export default function sketch(p) {
 
             // Lerp rotation amount based on transition progress
             const lerpedRotationAmount = rotationAmount * rotationProgress;
+            const rotationMethod = params.rotationMethod || "incremental";
 
-            const currentRotation = p.radians(
-              (isAnimated
-                ? p.map(
-                    p.sin(p.frameCount * rotationSpeed),
-                    -1,
-                    1,
-                    -lerpedRotationAmount,
-                    lerpedRotationAmount
-                  )
-                : lerpedRotationAmount) * i
-            );
+            let currentRotation;
+            if (isAnimated) {
+              const animatedValue = p.map(
+                p.sin(p.frameCount * rotationSpeed),
+                -1,
+                1,
+                -lerpedRotationAmount,
+                lerpedRotationAmount
+              );
+
+              if (rotationMethod === "wave") {
+                // Wave method: each ring has a phase-offset oscillation
+                // Creates a ripple/wiggle effect across the rings with multiple cycles
+                const waveFrequency = 3; // Number of wave cycles across all rings
+                const phaseOffset =
+                  (i / sliceAmount) * Math.PI * 2 * waveFrequency;
+                const waveAmount =
+                  lerpedRotationAmount *
+                  Math.sin(p.frameCount * rotationSpeed + phaseOffset);
+                // Don't multiply by i - each ring wiggles independently
+                currentRotation = p.radians(waveAmount);
+              } else {
+                // Incremental method (default): each ring rotates progressively more
+                currentRotation = p.radians(animatedValue * i);
+              }
+            } else {
+              // Static rotation
+              if (rotationMethod === "wave") {
+                // Wave method in static mode: creates a sinusoidal rotation pattern
+                const waveFrequency = 3; // Number of wave cycles across all rings
+                const phaseOffset =
+                  (i / sliceAmount) * Math.PI * 2 * waveFrequency;
+                const waveAmount = lerpedRotationAmount * Math.sin(phaseOffset);
+                currentRotation = p.radians(waveAmount);
+              } else {
+                // Incremental method: each ring rotates progressively more
+                currentRotation = p.radians(lerpedRotationAmount * i);
+              }
+            }
 
             const sw = Math.max(1, Math.floor(currentSize));
             const sh = Math.max(1, Math.floor(currentSize));
 
+            // imgLayer is centered at its own center, so convert from canvas coordinates to imgLayer local coordinates
+            // The imgLayer position on canvas is determined by posX and posY
+            const imgLayerCenterX = p.width / 2 + posX;
+            const imgLayerCenterY = p.height / 2 + posY;
+
+            // Convert canvas click point to imgLayer-local coordinates
+            const localCenterX =
+              centerX - (imgLayerCenterX - imgLayer.width / 2);
+            const localCenterY =
+              centerY - (imgLayerCenterY - imgLayer.height / 2);
+
             // sample top-left coordinates on the pattern image
-            const sx = Math.max(0, Math.floor(centerX - sw / 2));
-            const sy = Math.max(0, Math.floor(centerY - sh / 2));
+            const sx = Math.max(0, Math.floor(localCenterX - sw / 2));
+            const sy = Math.max(0, Math.floor(localCenterY - sh / 2));
 
             // Reuse a single temp graphics buffer, resizing as needed
             // This is much more efficient than creating a new one each iteration
@@ -459,6 +513,7 @@ export default function sketch(p) {
       lastCutSize = params.cutSize;
       lastSliceAmount = params.sliceAmount;
       lastRotationAmount = params.rotationAmount;
+      lastRotationMethod = params.rotationMethod;
 
       // Cache the display transform for next frame comparison
       lastDisplayPosX = params.imagePosX;
@@ -519,15 +574,17 @@ export default function sketch(p) {
           Math.min(imageBottom - maxRadius, cursorY)
         );
 
-        p.stroke(255, 0, 0); // Red stroke
-        p.strokeWeight(1);
-        p.noFill();
-        p.ellipse(
-          clampedCursorX,
-          clampedCursorY,
-          adjustedPreviewSize,
-          adjustedPreviewSize
-        );
+        if (showGuideCircle) {
+          p.stroke(255, 0, 0); // Red stroke
+          p.strokeWeight(1);
+          p.noFill();
+          p.ellipse(
+            clampedCursorX,
+            clampedCursorY,
+            adjustedPreviewSize,
+            adjustedPreviewSize
+          );
+        }
       }
     } else {
       // Placeholder text
@@ -742,6 +799,7 @@ export default function sketch(p) {
       lastCutSize = null;
       lastSliceAmount = null;
       lastRotationAmount = null;
+      lastRotationMethod = null;
       lastDisplayPosX = null;
       lastDisplayPosY = null;
       lastDisplayZoom = null;
@@ -857,11 +915,60 @@ export default function sketch(p) {
       updatePositionSliderBounds();
       updateCutSizeSliderBounds();
     }
+
+    // Restart lerp when rotation method changes
+    if (paramName === "rotationMethod") {
+      rotationTransitionStart = p.millis();
+    }
   }
 
   function handleSave() {
     p.saveCanvas("output", "png");
     console.log("Canvas saved");
+  }
+
+  function handleReset() {
+    // Clear slice placement
+    sliceCenterX = null;
+    sliceCenterY = null;
+
+    // Reset image transform directly in params object
+    params.imagePosX = 0;
+    params.imagePosY = 0;
+    params.imageZoom = 1;
+
+    // Invalidate all caches to force redraw
+    lastCutSize = null;
+    lastSliceAmount = null;
+    lastRotationAmount = null;
+    lastRotationMethod = null;
+    lastDisplayPosX = null;
+    lastDisplayPosY = null;
+    lastDisplayZoom = null;
+    lastPatternPosX = null;
+    lastPatternPosY = null;
+    lastPatternZoom = null;
+    patternImg = null;
+
+    // Clear graphics buffers to ensure clean state
+    if (display) display.clear();
+    if (buffer) buffer.clear();
+    if (imgLayer) imgLayer.clear();
+
+    // Reset rotation animation state
+    rotationTransitionStart = null;
+
+    // Update GUI controls to reflect new state
+    if (gui && gui.updateParameterValue) {
+      // Use setTimeout to defer GUI updates to next frame
+      setTimeout(() => {
+        gui.updateParameterValue("imagePosX", 0);
+        gui.updateParameterValue("imagePosY", 0);
+        gui.updateParameterValue("imageZoom", 1);
+      }, 0);
+    }
+
+    console.log("Image reset to initial state");
   }
 
   // mouseWheel handler for adjusting cut size

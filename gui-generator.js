@@ -94,6 +94,25 @@ function generateGUIControls() {
             </label>
           </div>
         `;
+      } else if (config.type === "select") {
+        // Render a dropdown/select menu
+        const optionsHtml = config.options
+          .map(
+            (opt) =>
+              `<option value="${opt.value}" ${
+                opt.value === config.default ? "selected" : ""
+              }>${opt.label}</option>`
+          )
+          .join("");
+
+        containerDiv.innerHTML = `
+          <label>${config.label}:</label>
+          <div>
+            <select id="${key}" class="gui-select">
+              ${optionsHtml}
+            </select>
+          </div>
+        `;
       } else {
         // Show number input for canvas dimensions, rotation amount, and slice amount
         const showNumberInput =

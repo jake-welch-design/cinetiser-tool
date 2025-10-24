@@ -7,7 +7,12 @@
  * Calculate dimensions to fit image to canvas while maintaining aspect ratio
  * and filling the entire canvas (with cropping if necessary)
  */
-export function calculateCoverDimensions(imgWidth, imgHeight, canvasWidth, canvasHeight) {
+export function calculateCoverDimensions(
+  imgWidth,
+  imgHeight,
+  canvasWidth,
+  canvasHeight
+) {
   const imgAspect = imgWidth / imgHeight;
   const canvasAspect = canvasWidth / canvasHeight;
 
@@ -46,10 +51,23 @@ export function calculateCoverDimensions(imgWidth, imgHeight, canvasWidth, canva
  * @param {number} offsetY - Additional Y offset for positioning
  * @param {number} zoom - Zoom level (1.0 = normal, > 1.0 = zoom in, < 1.0 = zoom out)
  */
-export function drawImageCover(p, img, canvasWidth, canvasHeight, offsetX = 0, offsetY = 0, zoom = 1.0) {
+export function drawImageCover(
+  p,
+  img,
+  canvasWidth,
+  canvasHeight,
+  offsetX = 0,
+  offsetY = 0,
+  zoom = 1.0
+) {
   if (!img) return;
 
-  const dims = calculateCoverDimensions(img.width, img.height, canvasWidth, canvasHeight);
+  const dims = calculateCoverDimensions(
+    img.width,
+    img.height,
+    canvasWidth,
+    canvasHeight
+  );
 
   p.push();
   p.imageMode(p.CENTER);
@@ -63,7 +81,12 @@ export function drawImageCover(p, img, canvasWidth, canvasHeight, offsetX = 0, o
  * Calculate the minimum zoom level that keeps the image covering the entire canvas
  * Returns the minimum zoom where no empty space is visible
  */
-export function calculateMinZoom(imgWidth, imgHeight, canvasWidth, canvasHeight) {
+export function calculateMinZoom(
+  imgWidth,
+  imgHeight,
+  canvasWidth,
+  canvasHeight
+) {
   // calculateCoverDimensions sizes the image at zoom 1.0 to exactly cover the canvas
   // One dimension matches exactly, the other is larger
   // If we zoom below 1.0, the image shrinks and won't cover the canvas anymore
@@ -74,25 +97,50 @@ export function calculateMinZoom(imgWidth, imgHeight, canvasWidth, canvasHeight)
 /**
  * Calculate the min and max position offsets that keep the image within bounds
  * Returns the range the image can be moved without showing empty space
+ *
+ * The image is drawn centered at (canvasWidth/2 + offsetX, canvasHeight/2 + offsetY).
+ * We want to allow moving it so any part of the image can be shown on canvas.
+ *
  * @param {number} zoom - Current zoom level to account for when calculating bounds
  */
-export function calculatePositionBounds(imgWidth, imgHeight, canvasWidth, canvasHeight, zoom = 1.0) {
-  const dims = calculateCoverDimensions(imgWidth, imgHeight, canvasWidth, canvasHeight);
+export function calculatePositionBounds(
+  imgWidth,
+  imgHeight,
+  canvasWidth,
+  canvasHeight,
+  zoom = 1.0
+) {
+  const dims = calculateCoverDimensions(
+    imgWidth,
+    imgHeight,
+    canvasWidth,
+    canvasHeight
+  );
 
   // Apply zoom to dimensions
   const zoomedWidth = dims.width * zoom;
   const zoomedHeight = dims.height * zoom;
 
-  // Calculate how much extra space the image has beyond the canvas
-  const excessWidth = zoomedWidth - canvasWidth;
-  const excessHeight = zoomedHeight - canvasHeight;
+  // When offsetX = 0, image center is at canvasWidth/2
+  // Image spans from: (canvasWidth/2 - zoomedWidth/2) to (canvasWidth/2 + zoomedWidth/2)
+  // When we add offsetX:
+  // - Left edge of image: canvasWidth/2 + offsetX - zoomedWidth/2
+  // - Right edge of image: canvasWidth/2 + offsetX + zoomedWidth/2
+  //
+  // To show the left edge at canvas left (0):
+  // canvasWidth/2 + offsetX - zoomedWidth/2 = 0 => offsetX = zoomedWidth/2 - canvasWidth/2
+  //
+  // To show the right edge at canvas right (canvasWidth):
+  // canvasWidth/2 + offsetX + zoomedWidth/2 = canvasWidth => offsetX = canvasWidth/2 - zoomedWidth/2
 
-  // The image can move half the excess in each direction
+  const maxOffsetX = (zoomedWidth - canvasWidth) / 2;
+  const maxOffsetY = (zoomedHeight - canvasHeight) / 2;
+
   return {
-    minX: -excessWidth / 2,
-    maxX: excessWidth / 2,
-    minY: -excessHeight / 2,
-    maxY: excessHeight / 2,
+    minX: -maxOffsetX,
+    maxX: maxOffsetX,
+    minY: -maxOffsetY,
+    maxY: maxOffsetY,
   };
 }
 
@@ -100,7 +148,12 @@ export function calculatePositionBounds(imgWidth, imgHeight, canvasWidth, canvas
  * Calculate dimensions to fit image within canvas while maintaining aspect ratio
  * (with letterboxing if necessary)
  */
-export function calculateContainDimensions(imgWidth, imgHeight, canvasWidth, canvasHeight) {
+export function calculateContainDimensions(
+  imgWidth,
+  imgHeight,
+  canvasWidth,
+  canvasHeight
+) {
   const imgAspect = imgWidth / imgHeight;
   const canvasAspect = canvasWidth / canvasHeight;
 
@@ -139,7 +192,12 @@ export function calculateContainDimensions(imgWidth, imgHeight, canvasWidth, can
 export function drawImageContain(p, img, canvasWidth, canvasHeight) {
   if (!img) return;
 
-  const dims = calculateContainDimensions(img.width, img.height, canvasWidth, canvasHeight);
+  const dims = calculateContainDimensions(
+    img.width,
+    img.height,
+    canvasWidth,
+    canvasHeight
+  );
 
   p.push();
   p.imageMode(p.CENTER);
