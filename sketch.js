@@ -63,7 +63,11 @@ export default function sketch(p) {
     imgLayer = p.createGraphics(p.width, p.height);
     display = p.createGraphics(p.width, p.height);
 
-    Utils.scaleCanvasToFit(canvasElement, params.canvasWidth, params.canvasHeight);
+    Utils.scaleCanvasToFit(
+      canvasElement,
+      params.canvasWidth,
+      params.canvasHeight
+    );
 
     gui.connectSketch({
       onImageLoaded: handleImageLoaded,
@@ -84,9 +88,7 @@ export default function sketch(p) {
         lastSliceAmount = null;
         lastRotationAmount = null;
         lastRotationMethod = null;
-        lastDisplayPosX = null;
-        lastDisplayPosY = null;
-        lastDisplayZoom = null;
+        // Don't reset lastDisplayPosX/Y/Zoom - image position is global
         lastPatternPosX = null;
         lastPatternPosY = null;
         lastPatternZoom = null;
@@ -94,8 +96,12 @@ export default function sketch(p) {
       },
     });
 
-    window.addEventListener("resize", () => 
-      Utils.scaleCanvasToFit(canvasElement, params.canvasWidth, params.canvasHeight)
+    window.addEventListener("resize", () =>
+      Utils.scaleCanvasToFit(
+        canvasElement,
+        params.canvasWidth,
+        params.canvasHeight
+      )
     );
 
     console.log("p5.js (instance mode) sketch ready");
@@ -798,7 +804,11 @@ export default function sketch(p) {
     params = allParameters;
     if (paramName === "canvasWidth" || paramName === "canvasHeight") {
       p.resizeCanvas(params.canvasWidth, params.canvasHeight);
-      Utils.scaleCanvasToFit(canvasElement, params.canvasWidth, params.canvasHeight);
+      Utils.scaleCanvasToFit(
+        canvasElement,
+        params.canvasWidth,
+        params.canvasHeight
+      );
 
       buffer = p.createGraphics(params.canvasWidth, params.canvasHeight);
       imgLayer = p.createGraphics(params.canvasWidth, params.canvasHeight);
