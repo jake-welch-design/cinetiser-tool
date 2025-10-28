@@ -171,4 +171,36 @@ export class Utils {
     const now = new Date();
     return now.toISOString().replace(/:/g, "-").split(".")[0];
   }
+
+  /**
+   * Scale a canvas element to fit within the viewport while maintaining aspect ratio
+   * @param {HTMLCanvasElement} canvasElement - The canvas DOM element to scale
+   * @param {number} canvasWidth - The logical width of the canvas
+   * @param {number} canvasHeight - The logical height of the canvas
+   * @param {number} margin - Margin to leave around the canvas (default: 20)
+   */
+  static scaleCanvasToFit(canvasElement, canvasWidth, canvasHeight, margin = 20) {
+    if (!canvasElement) return;
+
+    const container = document.getElementById("canvas-container");
+    if (container) container.style.padding = "10px";
+
+    const maxWidth = window.innerWidth - margin;
+    const maxHeight = window.innerHeight - margin;
+
+    const canvasAspect = canvasWidth / canvasHeight;
+    const windowAspect = maxWidth / maxHeight;
+
+    let scale;
+    if (canvasAspect > windowAspect) {
+      scale = maxWidth / canvasWidth;
+    } else {
+      scale = maxHeight / canvasHeight;
+    }
+
+    scale = Math.min(scale, 1);
+
+    canvasElement.style.width = `${canvasWidth * scale}px`;
+    canvasElement.style.height = `${canvasHeight * scale}px`;
+  }
 }

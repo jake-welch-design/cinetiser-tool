@@ -10,6 +10,7 @@ import {
 import { CutManager } from "./modules/cut-manager.js";
 import { RenderEngine } from "./modules/render-engine.js";
 import { CacheManager } from "./modules/cache-manager.js";
+import { Utils } from "./modules/utils.js";
 
 let params = getDefaultParameters();
 
@@ -62,7 +63,7 @@ export default function sketch(p) {
     imgLayer = p.createGraphics(p.width, p.height);
     display = p.createGraphics(p.width, p.height);
 
-    scaleCanvasToFit();
+    Utils.scaleCanvasToFit(canvasElement, params.canvasWidth, params.canvasHeight);
 
     gui.connectSketch({
       onImageLoaded: handleImageLoaded,
@@ -93,7 +94,9 @@ export default function sketch(p) {
       },
     });
 
-    window.addEventListener("resize", scaleCanvasToFit);
+    window.addEventListener("resize", () => 
+      Utils.scaleCanvasToFit(canvasElement, params.canvasWidth, params.canvasHeight)
+    );
 
     console.log("p5.js (instance mode) sketch ready");
   };
@@ -707,33 +710,6 @@ export default function sketch(p) {
     }
   };
 
-  function scaleCanvasToFit() {
-    if (!canvasElement) return;
-
-    const container = document.getElementById("canvas-container");
-
-    if (container) container.style.padding = "10px";
-
-    const margin = 20;
-    const maxWidth = window.innerWidth - margin;
-    const maxHeight = window.innerHeight - margin;
-
-    const canvasAspect = params.canvasWidth / params.canvasHeight;
-    const windowAspect = maxWidth / maxHeight;
-
-    let scale;
-    if (canvasAspect > windowAspect) {
-      scale = maxWidth / params.canvasWidth;
-    } else {
-      scale = maxHeight / params.canvasHeight;
-    }
-
-    scale = Math.min(scale, 1);
-
-    canvasElement.style.width = `${params.canvasWidth * scale}px`;
-    canvasElement.style.height = `${params.canvasHeight * scale}px`;
-  }
-
   function handleImageLoaded(imageDataUrl) {
     p.loadImage(imageDataUrl, (img) => {
       loadedImage = img;
@@ -822,7 +798,7 @@ export default function sketch(p) {
     params = allParameters;
     if (paramName === "canvasWidth" || paramName === "canvasHeight") {
       p.resizeCanvas(params.canvasWidth, params.canvasHeight);
-      scaleCanvasToFit();
+      Utils.scaleCanvasToFit(canvasElement, params.canvasWidth, params.canvasHeight);
 
       buffer = p.createGraphics(params.canvasWidth, params.canvasHeight);
       imgLayer = p.createGraphics(params.canvasWidth, params.canvasHeight);
