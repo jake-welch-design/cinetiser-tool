@@ -9,6 +9,7 @@ import {
 } from "./modules/image-processor.js";
 import { CutManager } from "./modules/cut-manager.js";
 import { RenderEngine } from "./modules/render-engine.js";
+import { CacheManager } from "./modules/cache-manager.js";
 
 let params = getDefaultParameters();
 
@@ -25,6 +26,7 @@ export default function sketch(p) {
 
   const cutManager = new CutManager();
   const renderEngine = new RenderEngine(p);
+  const cacheManager = new CacheManager();
 
   let rotationTransitionStart = null;
   let rotationTransitionDuration = 1000;
@@ -42,10 +44,6 @@ export default function sketch(p) {
   let lastDisplayPosX = null;
   let lastDisplayPosY = null;
   let lastDisplayZoom = null;
-
-  let cutCaches = [null, null, null, null, null, null];
-  let cutCacheParams = [null, null, null, null, null, null];
-  let previousActiveCutSlot = null;
 
   let bg = 0;
   let size = 500;
@@ -79,8 +77,7 @@ export default function sketch(p) {
         const wasChanged = cutManager.selectCutSlot(slotIndex);
         if (wasChanged) {
           rotationTransitionStart = p.millis();
-          cutCaches[slotIndex] = null;
-          cutCacheParams[slotIndex] = null;
+          cacheManager.invalidateSlot(slotIndex);
         }
         lastCutSize = null;
         lastSliceAmount = null;
@@ -372,10 +369,7 @@ export default function sketch(p) {
         }
 
         const selectedCutSlot = cutManager.getSelectedCutSlot();
-        if (selectedCutSlot !== previousActiveCutSlot) {
-          cutCaches[selectedCutSlot] = null;
-          previousActiveCutSlot = selectedCutSlot;
-        }
+        cacheManager.handleActiveCutSlotChange(selectedCutSlot);
 
         const cuts = cutManager.getCuts();
         for (let cutIdx = 0; cutIdx < cuts.length; cutIdx++) {
@@ -434,27 +428,26 @@ export default function sketch(p) {
               cutParams
             );
           } else {
-            const cacheKey = {
-              centerX: clampedCenterX,
-              centerY: clampedCenterY,
+            const cacheKey = cacheManager.createCacheKey(
+              clampedCenterX,
+              clampedCenterY,
               maxDiameter,
               cutSliceAmount,
               cutSize,
-              rotationAmount: cutParams.rotationAmount,
-              rotationSpeed: cutParams.rotationSpeed,
-              animated: cutParams.animated,
-              rotationMethod: cutParams.rotationMethod,
-            };
+              cutParams.rotationAmount,
+              cutParams.rotationSpeed,
+              cutParams.animated,
+              cutParams.rotationMethod
+            );
 
-            const needsCacheUpdate =
-              !cutCaches[slotIndex] ||
-              !cutCacheParams[slotIndex] ||
-              JSON.stringify(cutCacheParams[slotIndex]) !==
-                JSON.stringify(cacheKey);
+            const needsCacheUpdate = cacheManager.needsCacheUpdate(
+              slotIndex,
+              cacheKey
+            );
 
             if (needsCacheUpdate) {
               renderEngine.renderCutSlicesToBuffer(
-                cutCaches,
+                cacheManager.getCaches(),
                 slotIndex,
                 patternImg,
                 imgLayer,
@@ -469,11 +462,12 @@ export default function sketch(p) {
                 1.0,
                 cutParams
               );
-              cutCacheParams[slotIndex] = cacheKey;
+              cacheManager.updateCacheParams(slotIndex, cacheKey);
             }
 
-            if (cutCaches[slotIndex]) {
-              display.image(cutCaches[slotIndex], 0, 0);
+            const cachedGraphics = cacheManager.getCache(slotIndex);
+            if (cachedGraphics) {
+              display.image(cachedGraphics, 0, 0);
             }
           }
         }
@@ -750,9 +744,7 @@ export default function sketch(p) {
       lastPatternPosY = null;
       lastPatternZoom = null;
 
-      cutCaches = [null, null, null, null, null, null];
-      cutCacheParams = [null, null, null, null, null, null];
-      previousActiveCutSlot = null;
+      cacheManager.reset();
 
       display.clear();
       lastCutSize = null;
@@ -836,9 +828,7 @@ export default function sketch(p) {
       imgLayer = p.createGraphics(params.canvasWidth, params.canvasHeight);
       display = p.createGraphics(params.canvasWidth, params.canvasHeight);
 
-      cutCaches = [null, null, null, null, null, null];
-      cutCacheParams = [null, null, null, null, null, null];
-      previousActiveCutSlot = null;
+      cacheManager.reset();
 
       lastPatternPosX = null;
       lastPatternPosY = null;
@@ -852,13 +842,11 @@ export default function sketch(p) {
     if (paramName === "imageZoom") {
       updatePositionSliderBounds();
       updateCutSizeSliderBounds();
-      cutCaches = [null, null, null, null, null, null];
-      cutCacheParams = [null, null, null, null, null, null];
+      cacheManager.invalidateAll();
     }
 
     if (paramName === "imagePosX" || paramName === "imagePosY") {
-      cutCaches = [null, null, null, null, null, null];
-      cutCacheParams = [null, null, null, null, null, null];
+      cacheManager.invalidateAll();
     }
 
     if (
@@ -869,12 +857,7 @@ export default function sketch(p) {
       paramName === "rotationMethod" ||
       paramName === "animated"
     ) {
-      for (let i = 0; i < 6; i++) {
-        if (i !== cutManager.getSelectedCutSlot()) {
-          cutCaches[i] = null;
-          cutCacheParams[i] = null;
-        }
-      }
+      cacheManager.invalidateAllExcept(cutManager.getSelectedCutSlot());
     }
 
     if (paramName === "rotationMethod") {
