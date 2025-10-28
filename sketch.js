@@ -7,6 +7,7 @@ import {
   calculateMinZoom,
   calculateCoverDimensions,
 } from "./modules/image-processor.js";
+import { CutManager } from "./modules/cut-manager.js";
 
 let params = getDefaultParameters();
 
@@ -21,10 +22,7 @@ export default function sketch(p) {
   let cursorX = 0;
   let cursorY = 0;
 
-  let cutSlots = [null, null, null, null, null, null];
-  let selectedCutSlot = 0;
-  let cuts = [];
-  let activeCutIndex = null;
+  const cutManager = new CutManager();
 
   let rotationTransitionStart = null;
   let rotationTransitionDuration = 1000;
@@ -71,11 +69,29 @@ export default function sketch(p) {
       onParameterChange: handleParameterChange,
       saveCanvas: handleSave,
       resetImage: handleReset,
-      removeActiveCut: removeActiveCut,
-      getCutsInfo: getCutsInfo,
-      hasActiveCut: hasActiveCut,
-      getCutIndices: getCutIndices,
-      selectCutSlot: selectCutSlot,
+      removeActiveCut: () => cutManager.removeActiveCut(),
+      getCutsInfo: () => cutManager.getCutsInfo(),
+      hasActiveCut: () => cutManager.hasActiveCut(),
+      getCutIndices: () => cutManager.getCutIndices(),
+      selectCutSlot: (slotIndex) => {
+        const wasChanged = cutManager.selectCutSlot(slotIndex);
+        if (wasChanged) {
+          rotationTransitionStart = p.millis();
+          cutCaches[slotIndex] = null;
+          cutCacheParams[slotIndex] = null;
+        }
+        lastCutSize = null;
+        lastSliceAmount = null;
+        lastRotationAmount = null;
+        lastRotationMethod = null;
+        lastDisplayPosX = null;
+        lastDisplayPosY = null;
+        lastDisplayZoom = null;
+        lastPatternPosX = null;
+        lastPatternPosY = null;
+        lastPatternZoom = null;
+        patternImg = null;
+      },
     });
 
     window.addEventListener("resize", scaleCanvasToFit);
@@ -94,7 +110,7 @@ export default function sketch(p) {
     if (loadedImage) {
       const isAnimatedMode =
         params.animated !== undefined ? params.animated : true;
-      const hasSlices = cuts.length > 0;
+      const hasSlices = cutManager.getCuts().length > 0;
 
       const ringParametersChanged =
         lastCutSize !== params.cutSize ||
@@ -180,7 +196,7 @@ export default function sketch(p) {
           const imageTop = imageCenterY - zoomedImageHeight / 2;
           const imageBottom = imageCenterY + zoomedImageHeight / 2;
 
-          const previewCutParams = gui.getParametersForSlot(selectedCutSlot);
+          const previewCutParams = gui.getParametersForSlot(cutManager.getSelectedCutSlot());
           let previewCutSize = Math.max(1, previewCutParams.cutSize || 300);
           const maxAllowedDiameter = Math.min(
             zoomedImageWidth,
@@ -278,7 +294,7 @@ export default function sketch(p) {
 
       const angle = p.map(p.sin(p.frameCount * speed), -1, 1, -rotAmt, rotAmt);
 
-      const selectedCutParams = gui.getParametersForSlot(selectedCutSlot);
+      const selectedCutParams = gui.getParametersForSlot(cutManager.getSelectedCutSlot());
       let cutSize = Math.max(1, selectedCutParams.cutSize || 300);
       const sliceAmount = Math.max(
         1,
@@ -307,7 +323,7 @@ export default function sketch(p) {
 
       const ringThickness = cutSize / sliceAmount;
 
-      if (cuts.length > 0) {
+      if (cutManager.getCuts().length > 0) {
         const coverDims = calculateCoverDimensions(
           loadedImage.width,
           loadedImage.height,
@@ -349,11 +365,13 @@ export default function sketch(p) {
           }
         }
 
+        const selectedCutSlot = cutManager.getSelectedCutSlot();
         if (selectedCutSlot !== previousActiveCutSlot) {
           cutCaches[selectedCutSlot] = null;
           previousActiveCutSlot = selectedCutSlot;
         }
 
+        const cuts = cutManager.getCuts();
         for (let cutIdx = 0; cutIdx < cuts.length; cutIdx++) {
           const cut = cuts[cutIdx];
           const isActiveCut = cut.slotIndex === selectedCutSlot;
@@ -481,7 +499,7 @@ export default function sketch(p) {
         const imageTop = imageCenterY - zoomedImageHeight / 2;
         const imageBottom = imageCenterY + zoomedImageHeight / 2;
 
-        const previewCutParams2 = gui.getParametersForSlot(selectedCutSlot);
+        const previewCutParams2 = gui.getParametersForSlot(cutManager.getSelectedCutSlot());
         let previewCutSize = Math.max(1, previewCutParams2.cutSize || 300);
         const maxAllowedDiameter = Math.min(
           zoomedImageWidth,
@@ -653,7 +671,7 @@ export default function sketch(p) {
       const imageBottom = imageCenterY + zoomedImageHeight / 2;
 
       const selectedCutParamsForClick =
-        gui.getParametersForSlot(selectedCutSlot);
+        gui.getParametersForSlot(cutManager.getSelectedCutSlot());
       const cutSizeRadius = selectedCutParamsForClick.cutSize / 2;
 
       const clampedClickX = Math.max(
@@ -668,8 +686,8 @@ export default function sketch(p) {
       const imageSpaceX = (clampedClickX - imageCenterX) / params.imageZoom;
       const imageSpaceY = (clampedClickY - imageCenterY) / params.imageZoom;
 
-      placeCutInSlot(selectedCutSlot, imageSpaceX, imageSpaceY);
-      console.log(`Cut placed in slot ${selectedCutSlot}`);
+      cutManager.placeCutInSlot(cutManager.getSelectedCutSlot(), imageSpaceX, imageSpaceY);
+      console.log(`Cut placed in slot ${cutManager.getSelectedCutSlot()}`);
 
       rotationTransitionStart = p.millis();
       showCursorPreview = false;
@@ -920,149 +938,8 @@ export default function sketch(p) {
       display.image(buffer, 0, 0, sw, sh);
       display.pop();
     }
-  }
-
-  function placeCutInSlot(slotIndex, centerX, centerY) {
-    if (slotIndex < 0 || slotIndex >= 6) return;
-
-    cutSlots[slotIndex] = {
-      centerX: centerX,
-      centerY: centerY,
-    };
-
-    selectedCutSlot = slotIndex;
-    updateCutsArray();
-    console.log(`Placed cut in slot ${slotIndex}`);
-  }
-
-  function updateCutsArray() {
-    cuts = [];
-    cutSlots.forEach((cut, slotIndex) => {
-      if (cut !== null) {
-        cuts.push({
-          ...cut,
-          slotIndex: slotIndex,
-        });
-      }
-    });
-  }
-
-  function selectCutSlot(slotIndex) {
-    if (slotIndex >= 0 && slotIndex < 6) {
-      if (slotIndex !== selectedCutSlot) {
-        rotationTransitionStart = p.millis();
-
-        cutCaches[slotIndex] = null;
-        cutCacheParams[slotIndex] = null;
-      }
-
-      selectedCutSlot = slotIndex;
-
-      lastCutSize = null;
-      lastSliceAmount = null;
-      lastRotationAmount = null;
-      lastRotationMethod = null;
-      lastDisplayPosX = null;
-      lastDisplayPosY = null;
-      lastDisplayZoom = null;
-      lastPatternPosX = null;
-      lastPatternPosY = null;
-      lastPatternZoom = null;
-      patternImg = null;
-
-      console.log(`Selected cut slot ${slotIndex}`);
-    }
-  }
-
-  function clearCutSlot(slotIndex) {
-    if (slotIndex >= 0 && slotIndex < 6) {
-      cutSlots[slotIndex] = null;
-      updateCutsArray();
-    }
-  }
-
-  function clearAllCuts() {
-    cutSlots = [null, null, null, null, null, null];
-    cuts = [];
-    selectedCutSlot = 0;
-  }
-
-  function addCut(centerX, centerY) {
-    if (cuts.length >= 6) {
-      console.warn("Maximum of 6 cuts reached");
-      return null;
-    }
-    const newCut = {
-      id: nextCutId++,
-      centerX: centerX,
-      centerY: centerY,
-    };
-    cuts.push(newCut);
-    activeCutIndex = cuts.length - 1;
-    console.log(`Cut added at (${centerX}, ${centerY}), ID: ${newCut.id}`);
-    return activeCutIndex;
-  }
-
-  function removeActiveCut() {
-    if (activeCutIndex === null || cuts.length === 0) {
-      console.warn("No active cut to remove");
-      return;
-    }
-    const removedCut = cuts[activeCutIndex];
-    cuts.splice(activeCutIndex, 1);
-
-    if (cuts.length === 0) {
-      activeCutIndex = null;
-    } else if (activeCutIndex >= cuts.length) {
-      activeCutIndex = cuts.length - 1;
-    }
-    console.log(`Cut removed, ID: ${removedCut.id}`);
-  }
-
-  function selectCut(index) {
-    if (index >= 0 && index < cuts.length) {
-      activeCutIndex = index;
-    }
-  }
-
-  function findNearestCut(x, y, tolerance = 20) {
-    for (let i = 0; i < cuts.length; i++) {
-      const dx = cuts[i].centerX - x;
-      const dy = cuts[i].centerY - y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-      if (distance <= tolerance) {
-        return i;
-      }
-    }
-    return -1;
-  }
-
-  function getCutsInfo() {
-    if (cuts.length === 0) {
-      return "No cuts yet. Click on the image to add one.";
-    } else if (activeCutIndex === null) {
-      return `${cuts.length} cut${
-        cuts.length !== 1 ? "s" : ""
-      } placed. Click to select.`;
-    } else {
-      return `${cuts.length} cut${cuts.length !== 1 ? "s" : ""} placed. Cut ${
-        activeCutIndex + 1
-      } selected.`;
-    }
-  }
-
-  function getCutIndices() {
-    const usedIndices = [];
-    cutSlots.forEach((cut, slotIndex) => {
-      if (cut !== null) {
-        usedIndices.push(slotIndex);
-      }
-    });
-    return usedIndices;
-  }
-
-  function hasActiveCut() {
-    return activeCutIndex !== null && cuts.length > 0;
+    
+    p.redraw();
   }
 
   function handleImageLoaded(imageDataUrl) {
@@ -1088,10 +965,7 @@ export default function sketch(p) {
       lastDisplayPosY = null;
       lastDisplayZoom = null;
 
-      cutSlots = [null, null, null, null, null, null];
-      cuts = [];
-      selectedCutSlot = 0;
-      activeCutIndex = null;
+      cutManager.clearAllCuts();
       rotationTransitionStart = null;
 
       updateZoomSliderBounds();
@@ -1198,7 +1072,7 @@ export default function sketch(p) {
       paramName === "animated"
     ) {
       for (let i = 0; i < 6; i++) {
-        if (i !== selectedCutSlot) {
+        if (i !== cutManager.getSelectedCutSlot()) {
           cutCaches[i] = null;
           cutCacheParams[i] = null;
         }
@@ -1223,7 +1097,7 @@ export default function sketch(p) {
   }
 
   function handleReset() {
-    clearAllCuts();
+    cutManager.clearAllCuts();
 
     params.imagePosX = 0;
     params.imagePosY = 0;
@@ -1287,21 +1161,21 @@ export default function sketch(p) {
 
   function getDebugInfo() {
     return {
-      selectedCutSlot,
-      cutSlots: cutSlots.map((cut, idx) => ({
+      selectedCutSlot: cutManager.getSelectedCutSlot(),
+      cutSlots: cutManager.getCutSlots().map((cut, idx) => ({
         slotIndex: idx,
         hasCut: cut !== null,
         cut: cut,
       })),
       currentParameters: { ...params },
-      activeCuts: cuts.length,
+      activeCuts: cutManager.getCuts().length,
     };
   }
 
   function logCutParameterState() {
     console.log("=== CUT PARAMETER STATE ===");
-    console.log("Selected Slot:", selectedCutSlot);
-    cutSlots.forEach((cut, idx) => {
+    console.log("Selected Slot:", cutManager.getSelectedCutSlot());
+    cutManager.getCutSlots().forEach((cut, idx) => {
       if (cut !== null) {
         console.log(`Slot ${idx}:`, {
           center: { x: cut.centerX, y: cut.centerY },
@@ -1317,8 +1191,8 @@ export default function sketch(p) {
   window.cinetiserDebug = {
     getDebugInfo,
     logCutParameterState,
-    getCutSlots: () => cutSlots,
-    getSelectedSlot: () => selectedCutSlot,
+    getCutSlots: () => cutManager.getCutSlots(),
+    getSelectedSlot: () => cutManager.getSelectedCutSlot(),
     getParams: () => params,
     getCutParametersMap: () =>
       window.gui ? window.gui.cutParametersMap : null,
