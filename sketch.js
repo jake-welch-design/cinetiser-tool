@@ -55,6 +55,11 @@ export default function sketch(p) {
   let lastDisplayPosY = null;
   let lastDisplayZoom = null;
 
+  // Cut caching for inactive cuts - store rendered graphics for each cut slot
+  let cutCaches = [null, null, null, null, null, null]; // Cached PGraphics for each cut slot
+  let cutCacheParams = [null, null, null, null, null, null]; // Parameters used to generate each cache
+  let previousActiveCutSlot = null; // Track which cut was active last frame
+
   // Effect parameters (can be hooked to GUI later)
   let bg = 0;
   let size = 500;
@@ -395,13 +400,21 @@ export default function sketch(p) {
           }
         }
 
+        // Detect when active cut changes to invalidate cache for new active cut
+        if (selectedCutSlot !== previousActiveCutSlot) {
+          // Invalidate the cache for the newly selected cut since it needs lerp animation
+          cutCaches[selectedCutSlot] = null;
+          previousActiveCutSlot = selectedCutSlot;
+        }
+
         // Render all cuts
         for (let cutIdx = 0; cutIdx < cuts.length; cutIdx++) {
           const cut = cuts[cutIdx];
-          const isActiveCut = cutIdx === activeCutIndex;
+          const isActiveCut = cut.slotIndex === selectedCutSlot;
+          const slotIndex = cut.slotIndex;
 
           // Get the parameters for this specific cut's SLOT (not the array index!)
-          const cutParams = gui.getParametersForSlot(cut.slotIndex);
+          const cutParams = gui.getParametersForSlot(slotIndex);
 
           // Calculate this cut's size parameters
           let cutSize = Math.max(1, cutParams.cutSize || 300);
@@ -438,20 +451,65 @@ export default function sketch(p) {
             Math.min(imageBottom - maxRadius, canvasSpaceY)
           );
 
-          // Render this cut's slices using its specific parameters
-          renderCutSlices(
-            clampedCenterX,
-            clampedCenterY,
-            maxDiameter,
-            cutSliceAmount,
-            cutSize,
-            cutParams.rotationAmount,
-            cutParams.rotationSpeed,
-            cutParams.animated,
-            rotationProgress,
-            isActiveCut,
-            cutParams
-          );
+          if (isActiveCut) {
+            // For active cut: always render with lerp animation
+            renderCutSlices(
+              clampedCenterX,
+              clampedCenterY,
+              maxDiameter,
+              cutSliceAmount,
+              cutSize,
+              cutParams.rotationAmount,
+              cutParams.rotationSpeed,
+              cutParams.animated,
+              rotationProgress,
+              true,
+              cutParams
+            );
+          } else {
+            // For inactive cuts: use cache, only re-render if parameters changed
+            const cacheKey = {
+              centerX: clampedCenterX,
+              centerY: clampedCenterY,
+              maxDiameter,
+              cutSliceAmount,
+              cutSize,
+              rotationAmount: cutParams.rotationAmount,
+              rotationSpeed: cutParams.rotationSpeed,
+              animated: cutParams.animated,
+              rotationMethod: cutParams.rotationMethod,
+            };
+
+            const needsCacheUpdate =
+              !cutCaches[slotIndex] ||
+              !cutCacheParams[slotIndex] ||
+              JSON.stringify(cutCacheParams[slotIndex]) !==
+                JSON.stringify(cacheKey);
+
+            if (needsCacheUpdate) {
+              // Render inactive cut at full rotation (no animation, rotation=1.0)
+              renderCutSlicesToBuffer(
+                cutCaches,
+                slotIndex,
+                clampedCenterX,
+                clampedCenterY,
+                maxDiameter,
+                cutSliceAmount,
+                cutSize,
+                cutParams.rotationAmount,
+                cutParams.rotationSpeed,
+                cutParams.animated,
+                1.0, // Full rotation, no lerp
+                cutParams
+              );
+              cutCacheParams[slotIndex] = cacheKey;
+            }
+
+            // Draw cached cut to display layer
+            if (cutCaches[slotIndex]) {
+              display.image(cutCaches[slotIndex], 0, 0);
+            }
+          }
         }
       } // Close the "if cuts.length > 0" conditional
 
@@ -768,6 +826,126 @@ export default function sketch(p) {
    * @param {number} posX - Image pan X
    * @param {number} posY - Image pan Y
    */
+  function renderCutSlicesToBuffer(
+    cutCachesArray,
+    slotIndex,
+    centerX,
+    centerY,
+    maxDiameter,
+    sliceAmount,
+    cutSize,
+    rotationAmount,
+    rotationSpeed,
+    isAnimated,
+    rotationProgress,
+    cutParams = params
+  ) {
+    // Create or reuse a graphics buffer for this cut slot
+    if (!cutCachesArray[slotIndex]) {
+      cutCachesArray[slotIndex] = p.createGraphics(p.width, p.height);
+    }
+
+    const cachedLayer = cutCachesArray[slotIndex];
+    cachedLayer.clear();
+
+    const ringThickness = cutSize / sliceAmount;
+
+    // Only render slices if rotation amount is not 0
+    if (rotationAmount === 0) return;
+
+    for (let i = 0; i < sliceAmount; i++) {
+      const currentSize = maxDiameter - i * ringThickness;
+
+      // Use full rotation progress (no lerp) for cached cuts
+      const lerpedRotationAmount = rotationAmount * rotationProgress;
+      const rotationMethod = cutParams.rotationMethod || "incremental";
+
+      let currentRotation;
+      if (isAnimated) {
+        const animatedValue = p.map(
+          p.sin(p.frameCount * rotationSpeed),
+          -1,
+          1,
+          -lerpedRotationAmount,
+          lerpedRotationAmount
+        );
+
+        if (rotationMethod === "wave") {
+          const waveFrequency = 3;
+          const phaseOffset = (i / sliceAmount) * Math.PI * 2 * waveFrequency;
+          const waveAmount =
+            lerpedRotationAmount *
+            Math.sin(p.frameCount * rotationSpeed + phaseOffset);
+          currentRotation = p.radians(waveAmount);
+        } else {
+          currentRotation = p.radians(animatedValue * i);
+        }
+      } else {
+        if (rotationMethod === "wave") {
+          const waveFrequency = 3;
+          const phaseOffset = (i / sliceAmount) * Math.PI * 2 * waveFrequency;
+          const waveAmount = lerpedRotationAmount * Math.sin(phaseOffset);
+          currentRotation = p.radians(waveAmount);
+        } else {
+          currentRotation = p.radians(lerpedRotationAmount * i);
+        }
+      }
+
+      const sw = Math.max(1, Math.ceil(currentSize));
+      const sh = Math.max(1, Math.ceil(currentSize));
+
+      // Use a 2x resolution buffer for better quality
+      const bufferScale = 2;
+      const bufferW = Math.ceil(sw * bufferScale);
+      const bufferH = Math.ceil(sh * bufferScale);
+
+      // centerX and centerY are already in canvas space
+      // Calculate local coordinates within the image layer
+      const localCenterX = centerX - (p.width / 2 - imgLayer.width / 2);
+      const localCenterY = centerY - (p.height / 2 - imgLayer.height / 2);
+
+      // Clamp source coordinates to stay within patternImg bounds
+      const sx = Math.max(
+        0,
+        Math.min(patternImg.width - sw, localCenterX - sw / 2)
+      );
+      const sy = Math.max(
+        0,
+        Math.min(patternImg.height - sh, localCenterY - sh / 2)
+      );
+
+      if (!buffer || buffer.width !== bufferW || buffer.height !== bufferH) {
+        if (buffer) buffer.remove();
+        buffer = p.createGraphics(bufferW, bufferH);
+      }
+
+      buffer.clear();
+      buffer.push();
+      buffer.drawingContext.save();
+      buffer.drawingContext.beginPath();
+      buffer.drawingContext.ellipse(
+        bufferW / 2,
+        bufferH / 2,
+        bufferW / 2,
+        bufferH / 2,
+        0,
+        0,
+        Math.PI * 2
+      );
+      buffer.drawingContext.clip();
+      buffer.image(patternImg, 0, 0, bufferW, bufferH, sx, sy, sw, sh);
+      buffer.drawingContext.restore();
+      buffer.pop();
+
+      cachedLayer.push();
+      cachedLayer.imageMode(cachedLayer.CENTER);
+      cachedLayer.translate(centerX, centerY);
+      cachedLayer.rotate(currentRotation);
+      cachedLayer.image(buffer, 0, 0, sw, sh);
+      cachedLayer.pop();
+    }
+  }
+
   function renderCutSlices(
     centerX,
     centerY,
@@ -927,6 +1105,16 @@ export default function sketch(p) {
    */
   function selectCutSlot(slotIndex) {
     if (slotIndex >= 0 && slotIndex < 6) {
+      // Only trigger transition if switching to a different cut
+      if (slotIndex !== selectedCutSlot) {
+        // Start rotation transition animation when switching cuts
+        rotationTransitionStart = p.millis();
+
+        // Invalidate cache for the new active cut so it renders with lerp animation
+        cutCaches[slotIndex] = null;
+        cutCacheParams[slotIndex] = null;
+      }
+
       selectedCutSlot = slotIndex;
 
       // Clear caches when switching cuts to force re-render with new cut's parameters
@@ -1105,6 +1293,11 @@ export default function sketch(p) {
       lastPatternPosY = null;
       lastPatternZoom = null;
 
+      // Clear cut caches
+      cutCaches = [null, null, null, null, null, null];
+      cutCacheParams = [null, null, null, null, null, null];
+      previousActiveCutSlot = null;
+
       // Clear display layer cache
       display.clear();
       lastCutSize = null;
@@ -1210,6 +1403,11 @@ export default function sketch(p) {
       nextCutId = 0;
       rotationTransitionStart = null;
 
+      // Clear cut caches when canvas size changes
+      cutCaches = [null, null, null, null, null, null];
+      cutCacheParams = [null, null, null, null, null, null];
+      previousActiveCutSlot = null;
+
       // Invalidate pattern cache since canvas size changed
       lastPatternPosX = null;
       lastPatternPosY = null;
@@ -1225,6 +1423,28 @@ export default function sketch(p) {
     if (paramName === "imageZoom") {
       updatePositionSliderBounds();
       updateCutSizeSliderBounds();
+      // Invalidate cut caches when zoom changes (affects positions)
+      cutCaches = [null, null, null, null, null, null];
+      cutCacheParams = [null, null, null, null, null, null];
+    }
+
+    // Invalidate caches when parameters that affect cut rendering change
+    if (
+      paramName === "cutSize" ||
+      paramName === "sliceAmount" ||
+      paramName === "rotationAmount" ||
+      paramName === "rotationSpeed" ||
+      paramName === "rotationMethod" ||
+      paramName === "animated"
+    ) {
+      // Invalidate all cut caches since rendering parameters changed
+      for (let i = 0; i < 6; i++) {
+        if (i !== selectedCutSlot) {
+          // Don't invalidate active cut cache, it needs the lerp animation
+          cutCaches[i] = null;
+          cutCacheParams[i] = null;
+        }
+      }
     }
 
     // Restart lerp when rotation method changes
