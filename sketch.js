@@ -438,8 +438,10 @@ export default function sketch(p) {
           const maxRadius = maxDiameter / 2;
 
           // Convert cut from image-space to canvas-space for rendering
-          const canvasSpaceX = imageCenterX + cut.centerX * cutParams.imageZoom;
-          const canvasSpaceY = imageCenterY + cut.centerY * cutParams.imageZoom;
+          // IMPORTANT: Use global params.imageZoom, NOT cutParams.imageZoom
+          // This ensures cuts stay in correct position when zoom/position changes
+          const canvasSpaceX = imageCenterX + cut.centerX * params.imageZoom;
+          const canvasSpaceY = imageCenterY + cut.centerY * params.imageZoom;
 
           // Clamp cut center to stay within image bounds
           const clampedCenterX = Math.max(
@@ -1397,13 +1399,10 @@ export default function sketch(p) {
       imgLayer = p.createGraphics(params.canvasWidth, params.canvasHeight);
       display = p.createGraphics(params.canvasWidth, params.canvasHeight);
 
-      // Clear all cuts since coordinates are now invalid in new canvas
-      cuts = [];
-      activeCutIndex = null;
-      nextCutId = 0;
-      rotationTransitionStart = null;
+      // DON'T clear cuts! They're stored in image-space coordinates which remain valid
+      // Only clear the caches which depend on canvas size
 
-      // Clear cut caches when canvas size changes
+      // Clear cut caches when canvas size changes (must re-render at new resolution)
       cutCaches = [null, null, null, null, null, null];
       cutCacheParams = [null, null, null, null, null, null];
       previousActiveCutSlot = null;
@@ -1424,6 +1423,13 @@ export default function sketch(p) {
       updatePositionSliderBounds();
       updateCutSizeSliderBounds();
       // Invalidate cut caches when zoom changes (affects positions)
+      cutCaches = [null, null, null, null, null, null];
+      cutCacheParams = [null, null, null, null, null, null];
+    }
+
+    // Invalidate caches when image position changes (affects cut canvas positions)
+    if (paramName === "imagePosX" || paramName === "imagePosY") {
+      // Invalidate all cut caches since canvas positions changed
       cutCaches = [null, null, null, null, null, null];
       cutCacheParams = [null, null, null, null, null, null];
     }

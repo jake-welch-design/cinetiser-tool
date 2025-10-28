@@ -117,7 +117,7 @@ export const GUI_SECTIONS = {
     order: 2,
   },
   cinetisation: {
-    title: "Cinetisations",
+    title: "Cinetizations",
     order: 3,
   },
 };
