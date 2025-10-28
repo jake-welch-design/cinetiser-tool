@@ -95,15 +95,7 @@ export const GUI_CONFIG = {
     section: "cinetisation",
   },
 
-  // Rotation speed
-  rotationSpeed: {
-    default: 0.004,
-    min: 0,
-    max: 0.05,
-    step: 0.001,
-    label: "Speed",
-    section: "cinetisation",
-  },
+    // (rotationSpeed slider fully removed, speed is fixed in code)
 };
 
 // Define sections and their display properties
