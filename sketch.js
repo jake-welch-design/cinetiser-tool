@@ -24,6 +24,8 @@ export default function sketch(p) {
   let showCursorPreview = false;
   let cursorX = 0;
   let cursorY = 0;
+  let cursorCanvas = null; // Separate canvas for cursor overlay
+  let lastRenderedFrame = null; // Cache of the last rendered frame
 
   const cutManager = new CutManager();
   const renderEngine = new RenderEngine(p);
@@ -62,12 +64,30 @@ export default function sketch(p) {
     buffer = p.createGraphics(p.width, p.height);
     imgLayer = p.createGraphics(p.width, p.height);
     display = p.createGraphics(p.width, p.height);
+    
+    // Create a separate canvas for cursor overlay (positioned on top)
+    cursorCanvas = document.createElement('canvas');
+    cursorCanvas.width = params.canvasWidth;
+    cursorCanvas.height = params.canvasHeight;
+    cursorCanvas.style.position = 'absolute';
+    cursorCanvas.style.top = '0';
+    cursorCanvas.style.left = '0';
+    cursorCanvas.style.pointerEvents = 'none'; // Allow mouse events to pass through
+    cursorCanvas.style.imageRendering = 'auto';
+    canvasElement.parentElement.style.position = 'relative';
+    canvasElement.parentElement.appendChild(cursorCanvas);
 
     Utils.scaleCanvasToFit(
       canvasElement,
       params.canvasWidth,
       params.canvasHeight
     );
+    
+    // Scale cursor canvas to match main canvas
+    if (cursorCanvas) {
+      cursorCanvas.style.width = canvasElement.style.width;
+      cursorCanvas.style.height = canvasElement.style.height;
+    }
 
     gui.connectSketch({
       onImageLoaded: handleImageLoaded,
@@ -96,13 +116,18 @@ export default function sketch(p) {
       },
     });
 
-    window.addEventListener("resize", () =>
+    window.addEventListener("resize", () => {
       Utils.scaleCanvasToFit(
         canvasElement,
         params.canvasWidth,
         params.canvasHeight
-      )
-    );
+      );
+      // Sync cursor canvas scaling
+      if (cursorCanvas) {
+        cursorCanvas.style.width = canvasElement.style.width;
+        cursorCanvas.style.height = canvasElement.style.height;
+      }
+    });
 
     console.log("p5.js (instance mode) sketch ready");
   };
@@ -126,7 +151,7 @@ export default function sketch(p) {
       const zoomedImageWidth = coverDims.width * params.imageZoom;
       const zoomedImageHeight = coverDims.height * params.imageZoom;
       const maxAllowedDiameter = Math.min(zoomedImageWidth, zoomedImageHeight);
-      
+
       const posBounds = calculatePositionBounds(
         loadedImage.width,
         loadedImage.height,
@@ -142,14 +167,14 @@ export default function sketch(p) {
         posBounds.minY,
         Math.min(posBounds.maxY, params.imagePosY || 0)
       );
-      
+
       const imageCenterX = p.width / 2 + posX;
       const imageCenterY = p.height / 2 + posY;
       const imageLeft = imageCenterX - zoomedImageWidth / 2;
       const imageRight = imageCenterX + zoomedImageWidth / 2;
       const imageTop = imageCenterY - zoomedImageHeight / 2;
       const imageBottom = imageCenterY + zoomedImageHeight / 2;
-      
+
       const isAnimatedMode =
         params.animated !== undefined ? params.animated : true;
       const hasSlices = cutManager.getCuts().length > 0;
@@ -185,45 +210,7 @@ export default function sketch(p) {
         p.imageMode(p.CORNER);
         p.image(display, 0, 0, p.width, p.height);
 
-        if (showCursorPreview) {
-          const previewCutParams = gui.getParametersForSlot(
-            cutManager.getSelectedCutSlot()
-          );
-          let previewCutSize = Math.max(1, previewCutParams.cutSize || 300);
-          if (previewCutSize > maxAllowedDiameter) {
-            previewCutSize = maxAllowedDiameter;
-          }
-
-          const previewSliceAmount = Math.max(
-            1,
-            Math.floor(previewCutParams.sliceAmount || 10)
-          );
-          const ringThickness = previewCutSize / previewSliceAmount;
-          const adjustedPreviewSize = previewCutSize - ringThickness;
-
-          const cutSizeRadius = adjustedPreviewSize / 2;
-
-          const clampedCursorX = Math.max(
-            imageLeft + cutSizeRadius,
-            Math.min(imageRight - cutSizeRadius, cursorX)
-          );
-          const clampedCursorY = Math.max(
-            imageTop + cutSizeRadius,
-            Math.min(imageBottom - cutSizeRadius, cursorY)
-          );
-
-          if (showGuideCircle) {
-            p.stroke(255, 0, 0);
-            p.strokeWeight(1);
-            p.noFill();
-            p.ellipse(
-              clampedCursorX,
-              clampedCursorY,
-              adjustedPreviewSize,
-              adjustedPreviewSize
-            );
-          }
-        }
+        // Cursor preview is now drawn on separate overlay canvas
         return;
       }
 
@@ -421,46 +408,8 @@ export default function sketch(p) {
       p.imageMode(p.CORNER);
       p.image(display, 0, 0, p.width, p.height);
 
-      if (showCursorPreview) {
-        const previewCutParams2 = gui.getParametersForSlot(
-          cutManager.getSelectedCutSlot()
-        );
-        let previewCutSize = Math.max(1, previewCutParams2.cutSize || 300);
-        if (previewCutSize > maxAllowedDiameter) {
-          previewCutSize = maxAllowedDiameter;
-        }
+      // Cursor preview is now drawn on separate overlay canvas
 
-        const sliceAmount = Math.max(
-          1,
-          Math.floor(previewCutParams2.sliceAmount || 10)
-        );
-        const ringThickness = previewCutSize / sliceAmount;
-        const adjustedPreviewSize = previewCutSize - ringThickness;
-
-        const maxRadius = adjustedPreviewSize / 2;
-
-        const clampedCursorX = Math.max(
-          imageLeft + maxRadius,
-          Math.min(imageRight - maxRadius, cursorX)
-        );
-        const clampedCursorY = Math.max(
-          imageTop + maxRadius,
-          Math.min(imageBottom - maxRadius, cursorY)
-        );
-
-        if (showGuideCircle) {
-          p.stroke(255, 0, 0);
-          p.strokeWeight(1);
-          p.noFill();
-          p.ellipse(
-            clampedCursorX,
-            clampedCursorY,
-            adjustedPreviewSize,
-            adjustedPreviewSize
-          );
-        }
-      }
-      
       // Optimization: Stop looping if animation is off and nothing is changing
       if (!isAnimatedMode && rotationTransitionStart === null) {
         p.noLoop();
@@ -486,11 +435,11 @@ export default function sketch(p) {
         cursorX = p.mouseX;
         cursorY = p.mouseY;
         showCursorPreview = true;
-        p.redraw(); // Redraw to show cursor preview
+        drawCursorPreview(); // Draw cursor without full redraw
       } else {
         if (showCursorPreview) {
           showCursorPreview = false;
-          p.redraw(); // Redraw to hide cursor preview
+          drawCursorPreview(); // Clear cursor
         }
       }
     }
@@ -627,9 +576,86 @@ export default function sketch(p) {
 
       rotationTransitionStart = p.millis();
       showCursorPreview = false;
+      drawCursorPreview(); // Clear cursor overlay
       return false;
     }
   };
+
+  // Lightweight cursor preview that doesn't trigger full draw loop
+  function drawCursorPreview() {
+    if (!cursorCanvas || !loadedImage) return;
+    
+    const ctx = cursorCanvas.getContext('2d');
+    ctx.clearRect(0, 0, cursorCanvas.width, cursorCanvas.height);
+    
+    if (!showCursorPreview || !showGuideCircle) return;
+    
+    // Calculate necessary values
+    const coverDims = calculateCoverDimensions(
+      loadedImage.width,
+      loadedImage.height,
+      p.width,
+      p.height
+    );
+    const zoomedImageWidth = coverDims.width * params.imageZoom;
+    const zoomedImageHeight = coverDims.height * params.imageZoom;
+    const maxAllowedDiameter = Math.min(zoomedImageWidth, zoomedImageHeight);
+    
+    const posBounds = calculatePositionBounds(
+      loadedImage.width,
+      loadedImage.height,
+      p.width,
+      p.height,
+      params.imageZoom
+    );
+    const posX = Math.max(
+      posBounds.minX,
+      Math.min(posBounds.maxX, params.imagePosX || 0)
+    );
+    const posY = Math.max(
+      posBounds.minY,
+      Math.min(posBounds.maxY, params.imagePosY || 0)
+    );
+    
+    const imageCenterX = p.width / 2 + posX;
+    const imageCenterY = p.height / 2 + posY;
+    const imageLeft = imageCenterX - zoomedImageWidth / 2;
+    const imageRight = imageCenterX + zoomedImageWidth / 2;
+    const imageTop = imageCenterY - zoomedImageHeight / 2;
+    const imageBottom = imageCenterY + zoomedImageHeight / 2;
+    
+    const previewCutParams = gui.getParametersForSlot(
+      cutManager.getSelectedCutSlot()
+    );
+    let previewCutSize = Math.max(1, previewCutParams.cutSize || 300);
+    if (previewCutSize > maxAllowedDiameter) {
+      previewCutSize = maxAllowedDiameter;
+    }
+    
+    const previewSliceAmount = Math.max(
+      1,
+      Math.floor(previewCutParams.sliceAmount || 10)
+    );
+    const ringThickness = previewCutSize / previewSliceAmount;
+    const adjustedPreviewSize = previewCutSize - ringThickness;
+    const cutSizeRadius = adjustedPreviewSize / 2;
+    
+    const clampedCursorX = Math.max(
+      imageLeft + cutSizeRadius,
+      Math.min(imageRight - cutSizeRadius, cursorX)
+    );
+    const clampedCursorY = Math.max(
+      imageTop + cutSizeRadius,
+      Math.min(imageBottom - cutSizeRadius, cursorY)
+    );
+    
+    // Draw cursor preview circle
+    ctx.strokeStyle = 'rgb(255, 0, 0)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(clampedCursorX, clampedCursorY, adjustedPreviewSize / 2, 0, Math.PI * 2);
+    ctx.stroke();
+  }
 
   function handleImageLoaded(imageDataUrl) {
     p.loadImage(imageDataUrl, (img) => {
@@ -658,7 +684,7 @@ export default function sketch(p) {
       updateZoomSliderBounds();
       updatePositionSliderBounds();
       updateCutSizeSliderBounds();
-      
+
       p.loop(); // Resume rendering when image is loaded
     });
   }
@@ -719,10 +745,10 @@ export default function sketch(p) {
 
   function handleParameterChange(paramName, value, allParameters) {
     params = allParameters;
-    
+
     // Resume rendering when any parameter changes
     p.loop();
-    
+
     if (paramName === "canvasWidth" || paramName === "canvasHeight") {
       p.resizeCanvas(params.canvasWidth, params.canvasHeight);
       Utils.scaleCanvasToFit(
@@ -734,6 +760,14 @@ export default function sketch(p) {
       buffer = p.createGraphics(params.canvasWidth, params.canvasHeight);
       imgLayer = p.createGraphics(params.canvasWidth, params.canvasHeight);
       display = p.createGraphics(params.canvasWidth, params.canvasHeight);
+      
+      // Resize cursor canvas too
+      if (cursorCanvas) {
+        cursorCanvas.width = params.canvasWidth;
+        cursorCanvas.height = params.canvasHeight;
+        cursorCanvas.style.width = canvasElement.style.width;
+        cursorCanvas.style.height = canvasElement.style.height;
+      }
 
       cacheManager.reset();
 
@@ -765,12 +799,17 @@ export default function sketch(p) {
       paramName === "animated"
     ) {
       cacheManager.invalidateAllExcept(cutManager.getSelectedCutSlot());
+      
+      // Update cursor preview if size-related params changed
+      if (paramName === "cutSize" || paramName === "sliceAmount") {
+        drawCursorPreview();
+      }
     }
 
     if (paramName === "rotationMethod") {
       rotationTransitionStart = p.millis();
     }
-    
+
     // If animation was just turned on, ensure loop continues
     if (paramName === "animated" && value === true) {
       p.loop();
