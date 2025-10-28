@@ -8,6 +8,7 @@ import {
   calculateCoverDimensions,
 } from "./modules/image-processor.js";
 import { CutManager } from "./modules/cut-manager.js";
+import { RenderEngine } from "./modules/render-engine.js";
 
 let params = getDefaultParameters();
 
@@ -23,6 +24,7 @@ export default function sketch(p) {
   let cursorY = 0;
 
   const cutManager = new CutManager();
+  const renderEngine = new RenderEngine(p);
 
   let rotationTransitionStart = null;
   let rotationTransitionDuration = 1000;
@@ -196,7 +198,9 @@ export default function sketch(p) {
           const imageTop = imageCenterY - zoomedImageHeight / 2;
           const imageBottom = imageCenterY + zoomedImageHeight / 2;
 
-          const previewCutParams = gui.getParametersForSlot(cutManager.getSelectedCutSlot());
+          const previewCutParams = gui.getParametersForSlot(
+            cutManager.getSelectedCutSlot()
+          );
           let previewCutSize = Math.max(1, previewCutParams.cutSize || 300);
           const maxAllowedDiameter = Math.min(
             zoomedImageWidth,
@@ -294,7 +298,9 @@ export default function sketch(p) {
 
       const angle = p.map(p.sin(p.frameCount * speed), -1, 1, -rotAmt, rotAmt);
 
-      const selectedCutParams = gui.getParametersForSlot(cutManager.getSelectedCutSlot());
+      const selectedCutParams = gui.getParametersForSlot(
+        cutManager.getSelectedCutSlot()
+      );
       let cutSize = Math.max(1, selectedCutParams.cutSize || 300);
       const sliceAmount = Math.max(
         1,
@@ -411,7 +417,10 @@ export default function sketch(p) {
           );
 
           if (isActiveCut) {
-            renderCutSlices(
+            renderEngine.renderCutSlices(
+              display,
+              patternImg,
+              imgLayer,
               clampedCenterX,
               clampedCenterY,
               maxDiameter,
@@ -444,9 +453,11 @@ export default function sketch(p) {
                 JSON.stringify(cacheKey);
 
             if (needsCacheUpdate) {
-              renderCutSlicesToBuffer(
+              renderEngine.renderCutSlicesToBuffer(
                 cutCaches,
                 slotIndex,
+                patternImg,
+                imgLayer,
                 clampedCenterX,
                 clampedCenterY,
                 maxDiameter,
@@ -499,7 +510,9 @@ export default function sketch(p) {
         const imageTop = imageCenterY - zoomedImageHeight / 2;
         const imageBottom = imageCenterY + zoomedImageHeight / 2;
 
-        const previewCutParams2 = gui.getParametersForSlot(cutManager.getSelectedCutSlot());
+        const previewCutParams2 = gui.getParametersForSlot(
+          cutManager.getSelectedCutSlot()
+        );
         let previewCutSize = Math.max(1, previewCutParams2.cutSize || 300);
         const maxAllowedDiameter = Math.min(
           zoomedImageWidth,
@@ -670,8 +683,9 @@ export default function sketch(p) {
       const imageTop = imageCenterY - zoomedImageHeight / 2;
       const imageBottom = imageCenterY + zoomedImageHeight / 2;
 
-      const selectedCutParamsForClick =
-        gui.getParametersForSlot(cutManager.getSelectedCutSlot());
+      const selectedCutParamsForClick = gui.getParametersForSlot(
+        cutManager.getSelectedCutSlot()
+      );
       const cutSizeRadius = selectedCutParamsForClick.cutSize / 2;
 
       const clampedClickX = Math.max(
@@ -686,7 +700,11 @@ export default function sketch(p) {
       const imageSpaceX = (clampedClickX - imageCenterX) / params.imageZoom;
       const imageSpaceY = (clampedClickY - imageCenterY) / params.imageZoom;
 
-      cutManager.placeCutInSlot(cutManager.getSelectedCutSlot(), imageSpaceX, imageSpaceY);
+      cutManager.placeCutInSlot(
+        cutManager.getSelectedCutSlot(),
+        imageSpaceX,
+        imageSpaceY
+      );
       console.log(`Cut placed in slot ${cutManager.getSelectedCutSlot()}`);
 
       rotationTransitionStart = p.millis();
@@ -720,226 +738,6 @@ export default function sketch(p) {
 
     canvasElement.style.width = `${params.canvasWidth * scale}px`;
     canvasElement.style.height = `${params.canvasHeight * scale}px`;
-  }
-
-  function renderCutSlicesToBuffer(
-    cutCachesArray,
-    slotIndex,
-    centerX,
-    centerY,
-    maxDiameter,
-    sliceAmount,
-    cutSize,
-    rotationAmount,
-    rotationSpeed,
-    isAnimated,
-    rotationProgress,
-    cutParams = params
-  ) {
-    if (!cutCachesArray[slotIndex]) {
-      cutCachesArray[slotIndex] = p.createGraphics(p.width, p.height);
-    }
-
-    const cachedLayer = cutCachesArray[slotIndex];
-    cachedLayer.clear();
-
-    const ringThickness = cutSize / sliceAmount;
-
-    if (rotationAmount === 0) return;
-
-    for (let i = 0; i < sliceAmount; i++) {
-      const currentSize = maxDiameter - i * ringThickness;
-
-      const lerpedRotationAmount = rotationAmount * rotationProgress;
-      const rotationMethod = cutParams.rotationMethod || "incremental";
-
-      let currentRotation;
-      if (isAnimated) {
-        const animatedValue = p.map(
-          p.sin(p.frameCount * rotationSpeed),
-          -1,
-          1,
-          -lerpedRotationAmount,
-          lerpedRotationAmount
-        );
-
-        if (rotationMethod === "wave") {
-          const waveFrequency = 3;
-          const phaseOffset = (i / sliceAmount) * Math.PI * 2 * waveFrequency;
-          const waveAmount =
-            lerpedRotationAmount *
-            Math.sin(p.frameCount * rotationSpeed + phaseOffset);
-          currentRotation = p.radians(waveAmount);
-        } else {
-          currentRotation = p.radians(animatedValue * i);
-        }
-      } else {
-        if (rotationMethod === "wave") {
-          const waveFrequency = 3;
-          const phaseOffset = (i / sliceAmount) * Math.PI * 2 * waveFrequency;
-          const waveAmount = lerpedRotationAmount * Math.sin(phaseOffset);
-          currentRotation = p.radians(waveAmount);
-        } else {
-          currentRotation = p.radians(lerpedRotationAmount * i);
-        }
-      }
-
-      const sw = Math.max(1, Math.ceil(currentSize));
-      const sh = Math.max(1, Math.ceil(currentSize));
-
-      const bufferScale = 2;
-      const bufferW = Math.ceil(sw * bufferScale);
-      const bufferH = Math.ceil(sh * bufferScale);
-
-      const localCenterX = centerX - (p.width / 2 - imgLayer.width / 2);
-      const localCenterY = centerY - (p.height / 2 - imgLayer.height / 2);
-
-      const sx = Math.max(
-        0,
-        Math.min(patternImg.width - sw, localCenterX - sw / 2)
-      );
-      const sy = Math.max(
-        0,
-        Math.min(patternImg.height - sh, localCenterY - sh / 2)
-      );
-
-      if (!buffer || buffer.width !== bufferW || buffer.height !== bufferH) {
-        if (buffer) buffer.remove();
-        buffer = p.createGraphics(bufferW, bufferH);
-      }
-
-      buffer.clear();
-      buffer.push();
-      buffer.drawingContext.save();
-      buffer.drawingContext.beginPath();
-      buffer.drawingContext.ellipse(
-        bufferW / 2,
-        bufferH / 2,
-        bufferW / 2,
-        bufferH / 2,
-        0,
-        0,
-        Math.PI * 2
-      );
-      buffer.drawingContext.clip();
-      buffer.image(patternImg, 0, 0, bufferW, bufferH, sx, sy, sw, sh);
-      buffer.drawingContext.restore();
-      buffer.pop();
-
-      cachedLayer.push();
-      cachedLayer.imageMode(cachedLayer.CENTER);
-      cachedLayer.translate(centerX, centerY);
-      cachedLayer.rotate(currentRotation);
-      cachedLayer.image(buffer, 0, 0, sw, sh);
-      cachedLayer.pop();
-    }
-  }
-
-  function renderCutSlices(
-    centerX,
-    centerY,
-    maxDiameter,
-    sliceAmount,
-    cutSize,
-    rotationAmount,
-    rotationSpeed,
-    isAnimated,
-    rotationProgress,
-    isActiveCut,
-    cutParams = params
-  ) {
-    const ringThickness = cutSize / sliceAmount;
-
-    if (rotationAmount === 0) return;
-
-    for (let i = 0; i < sliceAmount; i++) {
-      const currentSize = maxDiameter - i * ringThickness;
-
-      const lerpedRotationAmount = rotationAmount * rotationProgress;
-      const rotationMethod = cutParams.rotationMethod || "incremental";
-
-      let currentRotation;
-      if (isAnimated) {
-        const animatedValue = p.map(
-          p.sin(p.frameCount * rotationSpeed),
-          -1,
-          1,
-          -lerpedRotationAmount,
-          lerpedRotationAmount
-        );
-
-        if (rotationMethod === "wave") {
-          const waveFrequency = 3;
-          const phaseOffset = (i / sliceAmount) * Math.PI * 2 * waveFrequency;
-          const waveAmount =
-            lerpedRotationAmount *
-            Math.sin(p.frameCount * rotationSpeed + phaseOffset);
-          currentRotation = p.radians(waveAmount);
-        } else {
-          currentRotation = p.radians(animatedValue * i);
-        }
-      } else {
-        if (rotationMethod === "wave") {
-          const waveFrequency = 3;
-          const phaseOffset = (i / sliceAmount) * Math.PI * 2 * waveFrequency;
-          const waveAmount = lerpedRotationAmount * Math.sin(phaseOffset);
-          currentRotation = p.radians(waveAmount);
-        } else {
-          currentRotation = p.radians(lerpedRotationAmount * i);
-        }
-      }
-
-      const sw = Math.max(1, Math.ceil(currentSize));
-      const sh = Math.max(1, Math.ceil(currentSize));
-
-      const bufferScale = 2;
-      const bufferW = Math.ceil(sw * bufferScale);
-      const bufferH = Math.ceil(sh * bufferScale);
-
-      const localCenterX = centerX - (p.width / 2 - imgLayer.width / 2);
-      const localCenterY = centerY - (p.height / 2 - imgLayer.height / 2);
-
-      const sx = Math.max(
-        0,
-        Math.min(patternImg.width - sw, localCenterX - sw / 2)
-      );
-      const sy = Math.max(
-        0,
-        Math.min(patternImg.height - sh, localCenterY - sh / 2)
-      );
-
-      if (!buffer || buffer.width !== bufferW || buffer.height !== bufferH) {
-        if (buffer) buffer.remove();
-        buffer = p.createGraphics(bufferW, bufferH);
-      }
-
-      buffer.clear();
-      buffer.push();
-      buffer.drawingContext.save();
-      buffer.drawingContext.beginPath();
-      buffer.drawingContext.ellipse(
-        bufferW / 2,
-        bufferH / 2,
-        bufferW / 2,
-        bufferH / 2,
-        0,
-        0,
-        Math.PI * 2
-      );
-      buffer.drawingContext.clip();
-      buffer.image(patternImg, 0, 0, bufferW, bufferH, sx, sy, sw, sh);
-      buffer.drawingContext.restore();
-      buffer.pop();
-
-      display.push();
-      display.imageMode(display.CENTER);
-      display.translate(centerX, centerY);
-      display.rotate(currentRotation);
-      display.image(buffer, 0, 0, sw, sh);
-      display.pop();
-    }
-    
-    p.redraw();
   }
 
   function handleImageLoaded(imageDataUrl) {
