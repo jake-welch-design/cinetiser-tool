@@ -126,9 +126,9 @@ export class CutManager {
         this.cuts.length !== 1 ? "s" : ""
       } placed. Click to select.`;
     } else {
-      return `${this.cuts.length} cut${this.cuts.length !== 1 ? "s" : ""} placed. Cut ${
-        this.activeCutIndex + 1
-      } selected.`;
+      return `${this.cuts.length} cut${
+        this.cuts.length !== 1 ? "s" : ""
+      } placed. Cut ${this.activeCutIndex + 1} selected.`;
     }
   }
 

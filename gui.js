@@ -11,9 +11,15 @@ class GUIController {
   constructor() {
     this.imageFile = null;
     this.parameters = getDefaultParameters();
-    
+
     // Global parameters that apply to all cuts
-    this.globalParameterKeys = ['imagePosX', 'imagePosY', 'imageZoom', 'canvasWidth', 'canvasHeight'];
+    this.globalParameterKeys = [
+      "imagePosX",
+      "imagePosY",
+      "imageZoom",
+      "canvasWidth",
+      "canvasHeight",
+    ];
     this.globalParameters = {}; // Will be initialized in initializeControls
 
     // Reference to sketch instance (set by sketch.js)
@@ -84,13 +90,13 @@ class GUIController {
     this.cutsGrid = document.getElementById("cuts-grid");
     this.cutButtons = [];
     this.currentCutIndex = 0; // Default to Cut 1 (index 0)
-    
+
     // Separate global parameters from per-cut parameters
     this.globalParameters = {};
-    this.globalParameterKeys.forEach(key => {
+    this.globalParameterKeys.forEach((key) => {
       this.globalParameters[key] = this.parameters[key];
     });
-    
+
     this.cutParametersMap = {}; // Store parameters for each cut: {cutIndex: {paramKey: value, ...}}
 
     this.initializeCutsGrid();
@@ -260,14 +266,16 @@ class GUIController {
     for (let i = 0; i < 6; i++) {
       // Create object with only per-cut parameters
       this.cutParametersMap[i] = {};
-      Object.keys(this.parameters).forEach(key => {
+      Object.keys(this.parameters).forEach((key) => {
         if (!this.globalParameterKeys.includes(key)) {
           // Only copy non-global parameters
           this.cutParametersMap[i][key] = this.parameters[key];
         }
       });
     }
-    console.log("✅ Cut parameters map initialized with per-cut parameters only");
+    console.log(
+      "✅ Cut parameters map initialized with per-cut parameters only"
+    );
     console.log("✅ Global parameters:", this.globalParameterKeys);
   }
 
@@ -283,16 +291,18 @@ class GUIController {
 
     // Step 2: Switch to the selected cut
     this.currentCutIndex = cutIndex;
-    
+
     // Step 3: Rebuild this.parameters by combining global + per-cut parameters
     this.parameters = {
       ...this.globalParameters,
-      ...this.cutParametersMap[cutIndex]
+      ...this.cutParametersMap[cutIndex],
     };
 
     console.log(`Switched to Cut ${cutIndex}`);
     console.log(`  Cut-specific: cutSize = ${this.parameters.cutSize}`);
-    console.log(`  Global: imagePosX = ${this.parameters.imagePosX}, imagePosY = ${this.parameters.imagePosY}`);
+    console.log(
+      `  Global: imagePosX = ${this.parameters.imagePosX}, imagePosY = ${this.parameters.imagePosY}`
+    );
 
     // Step 4: Notify sketch to clear caches BEFORE updating GUI
     // This ensures caches are cleared before any slider events fire
@@ -315,11 +325,11 @@ class GUIController {
       console.warn(`Invalid slot index: ${slotIndex}`);
       return this.getDefaultParameters();
     }
-    
+
     // Combine per-cut parameters with current global parameters
     return {
       ...this.globalParameters,
-      ...this.cutParametersMap[slotIndex]
+      ...this.cutParametersMap[slotIndex],
     };
   }
 

@@ -67,7 +67,11 @@ export class RenderEngine {
       );
 
       // Create or resize buffer if needed
-      if (!this.buffer || this.buffer.width !== bufferW || this.buffer.height !== bufferH) {
+      if (
+        !this.buffer ||
+        this.buffer.width !== bufferW ||
+        this.buffer.height !== bufferH
+      ) {
         if (this.buffer) this.buffer.remove();
         this.buffer = this.p.createGraphics(bufferW, bufferH);
       }
@@ -124,7 +128,10 @@ export class RenderEngine {
   ) {
     // Create cache graphics if it doesn't exist
     if (!cutCachesArray[slotIndex]) {
-      cutCachesArray[slotIndex] = this.p.createGraphics(this.p.width, this.p.height);
+      cutCachesArray[slotIndex] = this.p.createGraphics(
+        this.p.width,
+        this.p.height
+      );
     }
 
     const cachedLayer = cutCachesArray[slotIndex];
@@ -169,7 +176,11 @@ export class RenderEngine {
       );
 
       // Create or resize buffer if needed
-      if (!this.buffer || this.buffer.width !== bufferW || this.buffer.height !== bufferH) {
+      if (
+        !this.buffer ||
+        this.buffer.width !== bufferW ||
+        this.buffer.height !== bufferH
+      ) {
         if (this.buffer) this.buffer.remove();
         this.buffer = this.p.createGraphics(bufferW, bufferH);
       }
@@ -226,7 +237,8 @@ export class RenderEngine {
 
       if (rotationMethod === "wave") {
         const waveFrequency = 3;
-        const phaseOffset = (sliceIndex / totalSlices) * Math.PI * 2 * waveFrequency;
+        const phaseOffset =
+          (sliceIndex / totalSlices) * Math.PI * 2 * waveFrequency;
         const waveAmount =
           lerpedRotationAmount *
           Math.sin(this.p.frameCount * rotationSpeed + phaseOffset);
@@ -237,7 +249,8 @@ export class RenderEngine {
     } else {
       if (rotationMethod === "wave") {
         const waveFrequency = 3;
-        const phaseOffset = (sliceIndex / totalSlices) * Math.PI * 2 * waveFrequency;
+        const phaseOffset =
+          (sliceIndex / totalSlices) * Math.PI * 2 * waveFrequency;
         const waveAmount = lerpedRotationAmount * Math.sin(phaseOffset);
         return this.p.radians(waveAmount);
       } else {

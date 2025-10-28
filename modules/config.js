@@ -95,7 +95,7 @@ export const GUI_CONFIG = {
     section: "cinetisation",
   },
 
-    // (rotationSpeed slider fully removed, speed is fixed in code)
+  // (rotationSpeed slider fully removed, speed is fixed in code)
 };
 
 // Define sections and their display properties

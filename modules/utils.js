@@ -179,7 +179,12 @@ export class Utils {
    * @param {number} canvasHeight - The logical height of the canvas
    * @param {number} margin - Margin to leave around the canvas (default: 20)
    */
-  static scaleCanvasToFit(canvasElement, canvasWidth, canvasHeight, margin = 20) {
+  static scaleCanvasToFit(
+    canvasElement,
+    canvasWidth,
+    canvasHeight,
+    margin = 20
+  ) {
     if (!canvasElement) return;
 
     const container = document.getElementById("canvas-container");
